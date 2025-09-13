@@ -1,5 +1,4 @@
 # OxyJen🫧
-OxyJen — The AI Oxygen for Java &amp; JVM. Bringing LangGraph-style AI workflows and enterprise tools (Spring, GC, JVM) to the Java ecosystem.
 
 **OxyJen** is the missing AI framework for Java & JVM enterprises.  
 Think of it as *AI Oxygen for Java* — tools and workflows designed for banks, HFTs, and infra-heavy organizations.  
