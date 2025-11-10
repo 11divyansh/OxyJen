@@ -3,7 +3,7 @@ package io.oxyjen.core;
 /**
  * The fundamental contract for any Oxyjen Node.
  * 
- * A NodePlugin represents a single unit of computation in an Oxyjen graph.
+ * A NodePlugin represent a single unit of computation in an Oxyjen graph.
  * Each node takes an input of type I, performs some logic, and returns an output of type O.
  *
  * @param <I> Input type
