@@ -4,6 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
+
+import io.oxyjen.core.exceptions.ExceptionHandler;
+import io.oxyjen.core.logging.OxyLogger;
+
 /**
  * Shared execution context for all nodes in an Oxyjen graph.
  * Provides logging, shared data, and metadata during graph execution.
@@ -13,6 +17,9 @@ public class NodeContext {
     private final Map<String, Object> data = new HashMap<>();
     private final Logger logger = Logger.getLogger(NodeContext.class.getName());
     private final Map<String, Object> metadata = new HashMap<>();
+    
+    private OxyLogger oxyjenLogger;
+    private ExceptionHandler exceptionHandler;
 
     /**
      * Stores a key-value pair in the shared context data.
@@ -50,6 +57,40 @@ public class NodeContext {
         return logger;
     }
 
+    /**
+     * @return The structured Oxyjen logger used for contextual logs.
+     */
+    public OxyLogger getOxyjenLogger() {
+        if (oxyjenLogger == null) {
+            oxyjenLogger = new OxyLogger("default-graph");
+        }
+        return oxyjenLogger;
+    }
+
+    /**
+     * Allows setting a custom Oxyjen logger.
+     */
+    public void setOxyjenLogger(OxyLogger oxyjenLogger) {
+        this.oxyjenLogger = oxyjenLogger;
+    }
+
+    /**
+     * @return The current Oxyjen exception handler (defaults to basic handler).
+     */
+    public ExceptionHandler getExceptionHandler() {
+        if (exceptionHandler == null) {
+            exceptionHandler = ExceptionHandler.defaultHandler();
+        }
+        return exceptionHandler;
+    }
+
+    /**
+     * Allows customizing the Oxyjen exception handler for this context.
+     */
+    public void setExceptionHandler(ExceptionHandler exceptionHandler) {
+        this.exceptionHandler = exceptionHandler;
+    }
+    
     /**
      * Sets metadata about current graph or node execution.
      */
