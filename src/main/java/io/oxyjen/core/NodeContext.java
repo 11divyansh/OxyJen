@@ -56,6 +56,10 @@ public class NodeContext {
     public Logger getLogger() {
         return logger;
     }
+    
+    /**
+     * Enhancement for OxyLogger and ExceptionHandler
+     */
 
     /**
      * @return The structured Oxyjen logger used for contextual logs.
