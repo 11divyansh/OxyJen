@@ -23,7 +23,9 @@ public interface NodePlugin<I, O> {
     /**
      * @return A unique name or identifier for this node (for debugging, logs, etc.).
      */
-    String getName();
+    default String getName() {
+        return this.getClass().getSimpleName();   // or something similar
+    }
 
     /**
      * Lifecycle hook called before node execution starts.
@@ -36,4 +38,10 @@ public interface NodePlugin<I, O> {
      * Can be overridden for cleanup tasks (e.g., closing resources, post-logging).
      */
     default void onFinish(NodeContext context) {}
+    
+    /**
+     * Lifecycle hook called after node fails.
+     * Can be overridden.
+     */
+    default void onError(Exception e, NodeContext context) {}
 }
