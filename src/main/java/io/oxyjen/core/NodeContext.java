@@ -20,6 +20,8 @@ public class NodeContext {
     
     private OxyLogger oxyjenLogger;
     private ExceptionHandler exceptionHandler;
+    
+    
 
     /**
      * Stores a key-value pair in the shared context data.
@@ -66,7 +68,10 @@ public class NodeContext {
      */
     public OxyLogger getOxyjenLogger() {
         if (oxyjenLogger == null) {
-            oxyjenLogger = new OxyLogger("default-graph");
+        	String graphName = getMetadata("graphName");
+            oxyjenLogger = new OxyLogger(
+                    graphName != null ? graphName : "default-graph"
+            );
         }
         return oxyjenLogger;
     }

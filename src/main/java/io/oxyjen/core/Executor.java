@@ -43,15 +43,18 @@ public class Executor {
     public <I, O> O run(Graph graph, I input, NodeContext context) {
         // Ensure graph has at least one node before running.
         graph.validate();
+        
+        //Set graph name inside context, it will help in logging
+        context.setMetadata("graphName", graph.getName());
 
-        // The current result — initially the input, updated after each node executes.
+        // The current result —> initially the input, updated after each node executes.
         Object current = input;
 
         // Iterate through each node in insertion order.
         for (NodePlugin<?, ?> node : graph.getNodes()) {
             context.getLogger().info("Executing node: " + node.getName());
 
-            // Lifecycle hook — can be used for setup or initialization.
+            // Lifecycle hook —> can be used for setup or initialization.
             node.onStart(context);
 
             NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
@@ -59,7 +62,7 @@ public class Executor {
             // Run the node and capture its output.
             current = executeNode(safeNode, current, context);
 
-            // Lifecycle hook — cleanup or resource release.
+            // Lifecycle hook —> cleanup or resource release.
             node.onFinish(context);
 
             context.getLogger().info("Completed node: " + node.getName());
