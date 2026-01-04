@@ -338,7 +338,7 @@ String blog = executor.run(aiPipeline, "Write about AI", context);
 ```xml
 <dependency>
   <groupId>com.github.11divyansh</groupId>
-  <artifactId>OxyJen</artifactId>
+  <artifactId>Oxyjen</artifactId>
   <version>v0.1.0</version>
 </dependency>
 ```
@@ -350,7 +350,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:OxyJen:v0.1.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.1.0'
 }
 ```
 
