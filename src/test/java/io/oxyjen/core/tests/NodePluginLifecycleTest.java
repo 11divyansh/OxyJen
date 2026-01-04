@@ -58,7 +58,7 @@ class NodePluginLifecycleTest {
             executor.run(graph, "hello", ctx);
         });
 
-        assertTrue(ex.getMessage().contains("Intentional test exception"));
+        assertTrue(ex.getCause().getMessage().contains("Intentional test exception"));
     }
     
     @Test

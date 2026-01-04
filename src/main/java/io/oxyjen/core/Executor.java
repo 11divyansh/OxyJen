@@ -59,13 +59,37 @@ public class Executor {
 
             NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
             
-            // Run the node and capture its output.
-            current = executeNode(safeNode, current, context);
+            try {
+            	// Run the node and capture its output.
+            	current = executeNode(safeNode, current, context);
 
-            // Lifecycle hook —> cleanup or resource release.
-            node.onFinish(context);
+            	// Lifecycle hook —> cleanup or resource release.
+            	node.onFinish(context);
 
-            context.getLogger().info("Completed node: " + node.getName());
+            	context.getLogger().info("Completed node: " + node.getName());
+            } catch(Exception e) {
+            	context.getLogger().severe("Error in node [" +safeNode.getName() +"]: " + e.getMessage());
+            	
+            	// Call context-level ExceptionHandler if present
+            	if(context.getExceptionHandler() != null) {
+            		try {
+            			context.getExceptionHandler().handleException(safeNode, e, context);
+            		} catch(Exception ignored) {
+            			context.getLogger().warning("Context ExceptionHandler failder for node: " + safeNode.getName());
+            		}
+            	}
+            	try {
+            		safeNode.onError(e,context);
+            	} catch(Exception ignored) {
+            		context.getLogger().warning("Context ExceptionHandler failed for node: " + safeNode.getName());
+            	}
+            	
+            	// Re-throw so propagation test passes
+            	throw new RuntimeException(
+            		    "Node failed: " + safeNode.getName(), e
+            		);
+         
+            }
         }
 
         // Return the final result (casted to generic type O).
@@ -81,13 +105,8 @@ public class Executor {
      * @return The node’s output, which will be passed to the next node.
      */
     private Object executeNode(NodePlugin<Object, Object> node, Object input, NodeContext context) {
-        try {
-            // Execute the node’s business logic.
-            return node.process(input, context);
-        } catch (Exception e) {
-            // Log the failure and wrap it in a runtime exception.
-            context.getLogger().severe("Error in node [" + node.getName() + "]: " + e.getMessage());
-            throw new RuntimeException("Node failed: " + node.getName(), e);
-        }
+         // Execute the node’s business logic.
+         return node.process(input, context);
+ 
     }
 }
