@@ -1,0 +1,4 @@
+build:
+  commands:
+    - cd oxyjen-core
+    - mvn clean install
