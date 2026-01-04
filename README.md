@@ -319,7 +319,7 @@ String blog = executor.run(aiPipeline, "Write about AI", context);
 
 ## Installation
 
-[![](https://jitpack.io/v/11divyansh/OxyJen.svg)](https://jitpack.io/#11divyansh/OxyJen)
+[![](https://jitpack.io/v/11divyansh/Oxyjen.svg)](https://jitpack.io/#11divyansh/Oxyjen/v0.1.0)
 
 
 ### Maven
