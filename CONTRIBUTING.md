@@ -1,6 +1,6 @@
 # Contributing to Oxyjen
 
-First off, **thank you** for considering contributing to Oxyjen! 🎉
+First off, **thank you** for considering contributing to Oxyjen!
 
 This project is built in public and community-driven. Whether you're fixing a typo, adding a feature, or just providing feedback - every contribution matters.
 
