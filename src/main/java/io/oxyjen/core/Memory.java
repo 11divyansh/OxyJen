@@ -13,6 +13,10 @@ import java.util.List;
  * 1. Key-value store (arbitrary data)
  * 2. Ordered history (append-only log)
  */
+/**
+ * Memory is execution-scoped shared state.
+ * It contains NO domain logic and NO intelligence.
+ */
 public interface Memory {
     
     // ========== Stores Key-Value ==========
