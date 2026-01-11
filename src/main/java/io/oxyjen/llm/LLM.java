@@ -56,7 +56,7 @@ public final class LLM {
             return OpenAIChatModel.create(model);
         }
         
-        // v0.3: Add more providers
+        // v0.3: More providers
         // if (normalized.startsWith("claude")) {
         //     return AnthropicModels.create(model);
         // }
