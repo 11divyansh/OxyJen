@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.oxyjen.llm.exceptions.LLMException;
+
 /**
 * Production-ready ChatModel with fallbacks and retries.
 * 
