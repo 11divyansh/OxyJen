@@ -25,31 +25,31 @@ public record ChatRequest(
 			this.model = model;
 			return this;
 		}
-	}
 	
-	public Builder addMessage(String role, String content) {
-		this.messages.add(new Message(role, content));
-		return this;
-	}
 	
-	public Builder temperature(double temp) {
-		this.temperature = temp;
-		return this;
-	}
-	
-	public Builder maxTokens(int tokens) {
-		this.maxTokens = tokens;
-		return this;
-	}
-	
-	public ChatRequest build() {
-		if(model == null) {
-			throw new IllegalStateException("Model must be set");
+		public Builder addMessage(String role, String content) {
+			this.messages.add(new Message(role, content));
+			return this;
 		}
-		if(messages.isEmpty()) {
-			throw new IllegalStateException("At least one message required");
+	
+		public Builder temperature(double temp) {
+			this.temperature = temp;
+			return this;
 		}
-		return new ChatRequest(model, messages, temperature, maxTokens);
+	
+		public Builder maxTokens(int tokens) {
+			this.maxTokens = tokens;
+			return this;
+		}
+	
+		public ChatRequest build() {
+			if(model == null) {
+				throw new IllegalStateException("Model must be set");
+			}
+			if(messages.isEmpty()) {
+				throw new IllegalStateException("At least one message required");
+			}
+			return new ChatRequest(model, messages, temperature, maxTokens);
+		}
 	}
-
 }
