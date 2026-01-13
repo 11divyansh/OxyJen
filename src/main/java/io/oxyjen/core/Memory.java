@@ -19,8 +19,6 @@ import java.util.List;
  */
 public interface Memory {
     
-    // ========== Stores Key-Value ==========
-    
     /**
      * Store a value by key.
      */
@@ -52,8 +50,6 @@ public interface Memory {
      * Clear all key-value data.
      */
     void clear();
-    
-    // ========== Ordered History ==========
     
     /**
      * Append an entry to ordered history.

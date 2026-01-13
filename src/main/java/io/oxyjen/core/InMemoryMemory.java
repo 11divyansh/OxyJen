@@ -25,8 +25,6 @@ public final class InMemoryMemory implements Memory {
         this.scope = Objects.requireNonNull(scope);
     }
     
-    // ========== Store Key-Value ==========
-    
     @Override
     public void put(String key, Object value) {
         Objects.requireNonNull(key, "key cannot be null");
@@ -67,8 +65,6 @@ public final class InMemoryMemory implements Memory {
     public void clear() {
         store.clear();
     }
-    
-    // ========== Ordered History ==========
     
     @Override
     public void append(String type, Object value) {
