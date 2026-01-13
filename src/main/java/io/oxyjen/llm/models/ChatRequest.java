@@ -2,6 +2,8 @@ package io.oxyjen.llm.models;
 
 import java.util.List;
 
+import io.oxyjen.llm.semantics.Message;
+
 /**
  * Request to OpenAI chat completions API.
  */
