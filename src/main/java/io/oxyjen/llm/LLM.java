@@ -53,7 +53,7 @@ public final class LLM {
         
         // v0.2: Simple routing for OpenAI only
         if (normalized.startsWith("gpt")) {
-            return OpenAIChatModel.create(model);
+            return OpenAIModels.create(model);
         }
         
         // v0.3: More providers
