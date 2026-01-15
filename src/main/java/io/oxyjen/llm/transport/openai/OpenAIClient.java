@@ -1,4 +1,4 @@
-package io.oxyjen.llm.transport;
+package io.oxyjen.llm.transport.openai;
 
 import java.net.URI;
 import java.net.http.HttpClient;
