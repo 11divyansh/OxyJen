@@ -1,4 +1,5 @@
 package io.oxyjen.llm;
+import io.oxyjen.llm.transport.openai.OpenAIModels;
 /**
  * Public entry point for Oxyjen LLM system.
  * 
@@ -66,6 +67,13 @@ public final class LLM {
             "Supported in v0.2: gpt-4o, gpt-4o-mini, gpt-3.5-turbo\n" +
             "Coming in v0.3: claude-*, gemini-*"
         );
+    }
+    
+    /**
+     * Create OpenAI model with explicit API key.
+     */
+    public static ChatModel openai(String model, String apiKey) {
+        return OpenAIModels.create(model, apiKey);
     }
     
     /**

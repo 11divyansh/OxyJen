@@ -91,8 +91,6 @@ public final class LLMChain implements ChatModel {
        );
    }
    
-   // ========== Helper Methods ==========
-   
    private boolean shouldRetry(Exception e) {
        // Retry on transient errors only
        String message = e.getMessage();
@@ -129,8 +127,6 @@ public final class LLMChain implements ChatModel {
    private String modelName(ChatModel model) {
        return model.getClass().getSimpleName();
    }
-   
-   // ========== Builder ==========
    
    public static Builder builder() {
        return new Builder();
