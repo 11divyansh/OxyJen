@@ -8,8 +8,10 @@ import java.time.Duration;
 
 import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
 import io.oxyjen.llm.exceptions.LLMException;
+import io.oxyjen.llm.exceptions.ModelNotFoundException;
 import io.oxyjen.llm.exceptions.NetworkException;
 import io.oxyjen.llm.exceptions.RateLimitException;
+import io.oxyjen.llm.exceptions.TokenLimitExceededException;
 import io.oxyjen.llm.models.ChatRequest;
 import io.oxyjen.llm.models.ChatResponse;
 import io.oxyjen.llm.models.TokenUsage;
@@ -75,7 +77,7 @@ public final class OpenAIClient {
             
             // 3. Handle errors
             if (response.statusCode() != 200) {
-                throw classifyError(response);
+                throw classifyError(response, request.model());
             }
             
             // 4. Parse response
@@ -190,13 +192,27 @@ public final class OpenAIClient {
         }
     }
     
-    private RuntimeException classifyError(HttpResponse<String> response) {
+    private RuntimeException classifyError(HttpResponse<String> response, String model) {
         int status = response.statusCode();
         String body = response.body();
         
         return switch (status) {
+        	case 400 -> {
+        		if(body != null && body.contains("maximum context length")) {
+        			yield new TokenLimitExceededException(
+        					"Prompt exceeds model context length",
+        		            Models.getInfo(model).contextLength()
+        			);
+        		}
+        		yield new LLMException("Bad request: " + body);
+        	}
             case 401 -> new InvalidAPIKeyException(
                 "Invalid API key. Get your key from https://platform.openai.com/api-keys"
+            );
+            case 404 -> new ModelNotFoundException(
+            		model,
+            		"Model '" + model + "' does not exist. " +
+            	    "Available models: " + String.join(", ", Models.getSupportedModels())
             );
             case 429 -> new RateLimitException(
                 "Rate limit exceeded. Slow down or upgrade your plan."
