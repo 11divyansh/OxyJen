@@ -6,6 +6,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
+import io.oxyjen.llm.exceptions.LLMException;
+import io.oxyjen.llm.exceptions.NetworkException;
+import io.oxyjen.llm.exceptions.RateLimitException;
 import io.oxyjen.llm.models.ChatRequest;
 import io.oxyjen.llm.models.ChatResponse;
 import io.oxyjen.llm.models.TokenUsage;
@@ -191,21 +195,22 @@ public final class OpenAIClient {
         String body = response.body();
         
         return switch (status) {
-            case 401 -> new RuntimeException(
+            case 401 -> new InvalidAPIKeyException(
                 "Invalid API key. Get your key from https://platform.openai.com/api-keys"
             );
-            case 429 -> new RuntimeException(
+            case 429 -> new RateLimitException(
                 "Rate limit exceeded. Slow down or upgrade your plan."
             );
-            case 500, 502, 503 -> new RuntimeException(
-                "OpenAI server error. Try again in a moment."
+            case 500, 502, 503 -> new NetworkException(
+                 "OpenAI server error (" + status + "). Try again later.",
+                 null
             );
-            default -> new RuntimeException(
-                "OpenAI request failed with status " + status + ": " + body
+            default -> new LLMException(
+                 "OpenAI request failed with status " + status + ": " + body
             );
         };
     }
-    
+ 
     private String escapeJson(String str) {
         return str
             .replace("\\", "\\\\")
