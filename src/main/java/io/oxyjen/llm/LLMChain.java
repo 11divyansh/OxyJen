@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.oxyjen.llm.exceptions.LLMException;
+import io.oxyjen.llm.exceptions.NetworkException;
+import io.oxyjen.llm.exceptions.RateLimitException;
+import io.oxyjen.llm.exceptions.TimeoutException;
 
 /**
 * Production-ready ChatModel with fallbacks and retries.
@@ -96,11 +99,10 @@ public final class LLMChain implements ChatModel {
        String message = e.getMessage();
        if (message == null) return false;
        
-       return message.contains("rate limit") ||
-              message.contains("timeout") ||
-              message.contains("network") ||
-              message.contains("503") ||
-              message.contains("502");
+       return e instanceof RateLimitException ||
+              e instanceof NetworkException ||
+              e instanceof TimeoutException ;
+         
    }
    
    private long calculateBackoff(int attempt) {
