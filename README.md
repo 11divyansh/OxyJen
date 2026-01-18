@@ -275,7 +275,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - Bring AI orchestration (LangChain/LangGraph style) to Java.  
 - Build enterprise-first modules: Spring Config Analyzer, GC/JVM Log Analyzer, Secure Workflow Engine.  
 - Focus on **performance, security, and observability**, because enterprises need more than toys.
-- I'm building this to learn java in a 
+- I'm building this to learn java in a much deeper way.
 
 ### **Phase 1: Foundation (v0.1 - DONE)**
 Clean, extensible architecture that makes building pipelines intuitive.
