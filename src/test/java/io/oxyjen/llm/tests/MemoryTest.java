@@ -2,6 +2,7 @@ package io.oxyjen.llm.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -109,6 +110,43 @@ public class MemoryTest {
         assertEquals(2, recent.size());
         assertEquals("B", recent.get(0).value());
         assertEquals("C", recent.get(1).value());
+    }
+
+    @Test
+    void byTypeReturnsOnlyMatchingEntries() {
+        log("Memory.byType(type)");
+
+        Memory memory = new InMemoryMemory("test");
+
+        memory.append("chat", "hello");
+        memory.append("event", "connected");
+        memory.append("chat", "world");
+
+        List<Memory.MemoryEntry> chatEntries = memory.byType("chat");
+
+        print("chat entries", chatEntries);
+
+        assertEquals(2, chatEntries.size());
+        assertEquals("hello", chatEntries.get(0).value());
+        assertEquals("world", chatEntries.get(1).value());
+    }
+
+    @Test
+    void clearHistoryClearsOnlyHistory() {
+        log("Memory.clearHistory");
+
+        Memory memory = new InMemoryMemory("test");
+
+        memory.put("key", "value");
+        memory.append("chat", "hello");
+
+        memory.clearHistory();
+
+        print("entries after clearHistory", memory.entries());
+        print("key still exists", memory.get("key"));
+
+        assertTrue(memory.entries().isEmpty());
+        assertEquals("value", memory.get("key"));
     }
 
 
