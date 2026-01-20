@@ -129,4 +129,6 @@ public final class LLM {
     public static ChatModel gpt4oMini() {
         return of("gpt-4o-mini");
     }
+    
+    // TODO v0.3+: expose profile registration via LLM
 }

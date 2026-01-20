@@ -1,6 +1,7 @@
 package io.oxyjen.llm.tests;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,38 @@ class LLMProfilesTest {
 
         ChatModel model = LLM.profile("fast");
 
+        print("model class", model.getClass().getSimpleName());
+
+        assertNotNull(model);
+        assertTrue(model instanceof ChatModel);
+    }
+
+    @Test
+    void unknownProfileThrowsException() {
+        log("LLM.profile(unknown) throws exception");
+
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> LLM.profile("does-not-exist")
+        );
+
+        print("exception message", ex.getMessage());
+
+        assertTrue(ex.getMessage().contains("Unknown profile"));
+    }
+
+    @Test
+    void registerProfileIsImmediatelyAvailable() {
+        log("LLMProfiles.register creates retrievable profile");
+
+        String profileName = "test-profile";
+        String modelName = "gpt-4o-mini";
+
+        //LLM.registerProfile(profileName, modelName); //v0.3+ feature
+
+        ChatModel model = LLM.profile(profileName);
+
+        print("registered profile", profileName);
         print("model class", model.getClass().getSimpleName());
 
         assertNotNull(model);
