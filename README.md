@@ -370,7 +370,7 @@ import io.oxyjen.core.*;
 
 ## About
 
-Built with ❤️ by [Divyansh](https://github.com/11divyansh) - a BTech CS student who believes Java deserves world-class AI tooling.
+Built with ❤️ by [Divyansh Bhatt](https://github.com/11divyansh) - a BTech CS student who believes Java deserves world-class AI tooling.
 
 **This started as a learning project, but I'm committed to making it production-ready. I know this is not big yet, but lets make it valuable.**
 
