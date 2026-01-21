@@ -86,5 +86,44 @@ public class LLMNodeTest {
         assertTrue(name1.startsWith("LLM["));
     }
 
+    @Test
+    void nodeAccumulatesMemoryAcrossMultipleRuns() {
+        log("LLMNode accumulates memory across multiple executions");
+
+        ChatModel model = new FakeChatModel();
+        LLMNode node = LLMNode.builder()
+            .model(model)
+            .memory("chat")
+            .build();
+
+        NodeContext context = new NodeContext();
+
+        // First run
+        String out1 = node.process("hello", context);
+
+        // Second run(same context)
+        String out2 = node.process("world", context);
+
+        Memory memory = context.memory("chat");
+
+        print("output1", out1);
+        print("output2", out2);
+        print("memory entries", memory.entries());
+
+        assertEquals(4, memory.entries().size());
+
+        assertEquals("user", memory.entries().get(0).type());
+        assertEquals("hello", memory.entries().get(0).value());
+
+        assertEquals("assistant", memory.entries().get(1).type());
+        assertEquals("echo:hello", memory.entries().get(1).value());
+
+        assertEquals("user", memory.entries().get(2).type());
+        assertEquals("world", memory.entries().get(2).value());
+
+        assertEquals("assistant", memory.entries().get(3).type());
+        assertEquals("echo:world", memory.entries().get(3).value());
+    }
+
 
 }
