@@ -1,5 +1,6 @@
 package io.oxyjen.llm.execution.tests;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import io.oxyjen.core.Memory;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLM;
+import io.oxyjen.llm.LLMChain;
 import io.oxyjen.llm.LLMNode;
 
 public class LLMNodeTest {
@@ -123,6 +126,55 @@ public class LLMNodeTest {
 
         assertEquals("assistant", memory.entries().get(3).type());
         assertEquals("echo:world", memory.entries().get(3).value());
+    }
+
+    @Test
+    void nodeExecutesWithProfileBasedModel() {
+        log("LLMNode executes with profile-based model");
+
+        // Profile resolves to ChatModel
+        ChatModel model = LLM.profile("fast");
+
+        LLMNode node = LLMNode.builder()
+            .model(model)
+            .build();
+
+        NodeContext context = new NodeContext();
+
+        // We don't assert output content (OpenAI-backed)
+        // We assert NO type / cast errors
+        assertDoesNotThrow(() -> {
+            node.process("hello", context);
+        });
+
+        print("node name", node.getName());
+    }
+
+    @Test
+    void nodeExecutesWithChainBasedModel() {
+        log("LLMNode executes with LLMChain");
+
+        FlakyModel primary = new FlakyModel();
+
+        ChatModel chain = LLMChain.builder()
+            .primary(primary)
+            .retry(2)
+            .build();
+
+        LLMNode node = LLMNode.builder()
+            .model(chain)
+            .build();
+
+        NodeContext context = new NodeContext();
+
+        String result = assertDoesNotThrow(() ->
+            node.process("hello", context)
+        );
+
+        print("result", result);
+        print("primary calls", primary.calls);
+
+        assertEquals("chain-ok", result);
     }
 
 
