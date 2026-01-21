@@ -1,0 +1,90 @@
+package io.oxyjen.llm.execution.tests;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
+
+import io.oxyjen.core.Memory;
+import io.oxyjen.core.NodeContext;
+import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMNode;
+
+public class LLMNodeTest {
+
+	private void log(String title) {
+        System.out.println("\n==============================");
+        System.out.println(title);
+        System.out.println("==============================");
+    }
+
+    private void print(String label, Object value) {
+        System.out.println(label + " => " + value);
+    }
+    @Test
+    void inputFlowsThroughNodeAndReturnsOutput() {
+        log("LLMNode passes input to model and returns output");
+
+        ChatModel model = new FakeChatModel();
+        LLMNode node = LLMNode.builder()
+            .model(model)
+            .build();
+
+        NodeContext context = new NodeContext();
+
+        String input = "hello";
+        String output = node.process(input, context);
+
+        print("input", input);
+        print("output", output);
+
+        assertEquals("echo:hello", output);
+    }
+    @Test
+    void nodeWritesUserAndAssistantMessagesToMemory() {
+        log("LLMNode writes input and output to memory");
+
+        ChatModel model = new FakeChatModel();
+        LLMNode node = LLMNode.builder()
+            .model(model)
+            .memory("chat")
+            .build();
+
+        NodeContext context = new NodeContext();
+
+        node.process("hi", context);
+
+        Memory memory = context.memory("chat");
+
+        print("memory entries", memory.entries());
+
+        assertEquals(2, memory.entries().size());
+
+        assertEquals("user", memory.entries().get(0).type());
+        assertEquals("hi", memory.entries().get(0).value());
+
+        assertEquals("assistant", memory.entries().get(1).type());
+        assertEquals("echo:hi", memory.entries().get(1).value());
+    }
+
+    @Test
+    void nodeNameIsStable() {
+        log("LLMNode name is stable");
+
+        ChatModel model = new FakeChatModel();
+        LLMNode node = LLMNode.builder()
+            .model(model)
+            .build();
+
+        String name1 = node.getName();
+        String name2 = node.getName();
+
+        print("name1", name1);
+        print("name2", name2);
+
+        assertEquals(name1, name2);
+        assertTrue(name1.startsWith("LLM["));
+    }
+
+
+}
