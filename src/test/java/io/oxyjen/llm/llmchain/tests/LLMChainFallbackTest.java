@@ -71,5 +71,29 @@ public class LLMChainFallbackTest {
 	        assertEquals(1, primary.calls);
 	        assertEquals(1, fallback.calls);
 	    }
+	    @Test
+	    void retriesPrimaryThenFallsBackOnSuccess() {
+	        log("LLMChain retries primary then falls back successfully");
+
+	        RetryFailingPrimary primary = new RetryFailingPrimary();
+	        SuccessfulFallbackModel fallback = new SuccessfulFallbackModel();
+
+	        ChatModel chain = LLMChain.builder()
+	            .primary(primary)
+	            .fallback(fallback)
+	            .retry(2)
+	            .build();
+
+	        String result = chain.chat("hello");
+
+	        print("result", result);
+	        print("primary calls", primary.calls);
+	        print("fallback calls", fallback.calls);
+
+	        assertEquals("fallback-success", result);
+	        assertEquals(2, primary.calls);   // retries exhausted first
+	        assertEquals(1, fallback.calls);  // fallback attempted after retries
+	    }
+
 
 }
