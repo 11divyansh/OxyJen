@@ -128,27 +128,27 @@ public class LLMNodeTest {
         assertEquals("echo:world", memory.entries().get(3).value());
     }
 
-    @Test
-    void nodeExecutesWithProfileBasedModel() {
-        log("LLMNode executes with profile-based model");
-
-        // Profile resolves to ChatModel
-        ChatModel model = LLM.profile("fast");
-
-        LLMNode node = LLMNode.builder()
-            .model(model)
-            .build();
-
-        NodeContext context = new NodeContext();
-
-        // We don't assert output content (OpenAI-backed)
-        // We assert NO type / cast errors
-        assertDoesNotThrow(() -> {
-            node.process("hello", context);
-        });
-
-        print("node name", node.getName());
-    }
+//    @Test
+//    void nodeExecutesWithProfileBasedModel() {
+//        log("LLMNode executes with profile-based model");
+//
+//        // Profile resolves to ChatModel
+//        ChatModel model = LLM.profile("fast");
+//
+//        LLMNode node = LLMNode.builder()
+//            .model(model)
+//            .build();
+//
+//        NodeContext context = new NodeContext();
+//
+//        // We don't assert output content (OpenAI-backed)
+//        // We assert NO type / cast errors
+//        assertDoesNotThrow(() -> {
+//            node.process("hello", context);
+//        });
+//
+//        print("node name", node.getName());
+//    }
 
     @Test
     void nodeExecutesWithChainBasedModel() {
