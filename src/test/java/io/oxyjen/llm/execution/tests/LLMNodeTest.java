@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import io.oxyjen.core.Memory;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.ChatModel;
-import io.oxyjen.llm.LLM;
 import io.oxyjen.llm.LLMChain;
 import io.oxyjen.llm.LLMNode;
 

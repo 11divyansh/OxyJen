@@ -1,7 +1,7 @@
 package io.oxyjen.core.tests;
 
-import io.oxyjen.core.NodePlugin;
 import io.oxyjen.core.NodeContext;
+import io.oxyjen.core.NodePlugin;
 
 public class ErrorNode implements NodePlugin<String, String> {
     @Override
