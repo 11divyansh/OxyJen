@@ -314,7 +314,7 @@ First-class support for LLM providers:
 
 ## Installation
 
-[![](https://jitpack.io/v/11divyansh/Oxyjen.svg)](https://jitpack.io/#11divyansh/Oxyjen/v0.1.0)
+[![](https://jitpack.io/v/11divyansh/Oxyjen.svg)](https://jitpack.io/#11divyansh/Oxyjen/v0.2.0)
 
 
 ### Maven
@@ -334,7 +334,7 @@ First-class support for LLM providers:
 <dependency>
   <groupId>com.github.11divyansh</groupId>
   <artifactId>Oxyjen</artifactId>
-  <version>v0.1.0</version>
+  <version>v0.2.0</version>
 </dependency>
 ```
 
@@ -345,7 +345,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:Oxyjen:v0.1.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.2.0'
 }
 ```
 
@@ -360,6 +360,7 @@ After installation, verify by importing:
 
 ```java
 import io.oxyjen.core.*;
+import io.oxyjen.llm.*;
 ```
 ---
 
