@@ -4,8 +4,6 @@
 
 **AI Orchestration Framework for Java** - Build complex AI pipelines with simplicity and power.
 
-(CONTRIBUTING.md)
-
 ---
 
 ## What is Oxyjen?
