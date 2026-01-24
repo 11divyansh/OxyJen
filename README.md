@@ -4,8 +4,6 @@
 
 **AI Orchestration Framework for Java** - Build complex AI pipelines with simplicity and power.
 
-(CONTRIBUTING.md)
-
 ---
 
 ## What is Oxyjen?
@@ -280,26 +278,11 @@ class FormatterNode implements NodePlugin<String, String> {
 ### **Phase 1: Foundation (v0.1 - DONE)**
 Clean, extensible architecture that makes building pipelines intuitive.
 
-### **Phase 2: AI Integration (v0.2 - Next 1-2 Weeks)**
+### **Phase 2: AI Integration (v0.2 - Done)**
 First-class support for LLM providers:
 - **OpenAI** (GPT-4, GPT-3.5)
-- **Anthropic** (Claude Sonnet, Opus)
-- **Google** (Gemini Pro)
-- Streaming responses
-- Token counting & cost tracking
-- Prompt templates
 
-**Example (coming soon):**
-```java
-Graph aiPipeline = GraphBuilder.named("content-generator")
-    .addNode(new ClaudeChatNode("claude-sonnet-4")
-        .withSystemPrompt("You are a helpful assistant")
-        .withTemperature(0.7))
-    .addNode(new FormatterNode())
-    .build();
 
-String blog = executor.run(aiPipeline, "Write about AI", context);
-```
 
 ### **Phase 3: Advanced Orchestration (v0.3 - 4-6 Weeks)**
 - **Async execution** - Run nodes in parallel
@@ -307,6 +290,10 @@ String blog = executor.run(aiPipeline, "Write about AI", context);
 - **Conditional routing** - "If X, then run node Y"
 - **Retry logic** - Automatic retries with backoff
 - **Circuit breakers** - Fail fast when services are down
+- **Streaming responses**
+- **Token counting & cost tracking**
+- **Prompt templates**
+
 
 
 ### **Also Planning on: Production & Enterprise (v0.4+)**
@@ -317,9 +304,15 @@ String blog = executor.run(aiPipeline, "Write about AI", context);
 
 ---
 
+## Documentation
+
+- [Oxyjen v0.2](docs/v0.2.md)
+
+---
+
 ## Installation
 
-[![](https://jitpack.io/v/11divyansh/Oxyjen.svg)](https://jitpack.io/#11divyansh/Oxyjen/v0.1.0)
+[![](https://jitpack.io/v/11divyansh/Oxyjen.svg)](https://jitpack.io/#11divyansh/Oxyjen/v0.2.0)
 
 
 ### Maven
@@ -339,7 +332,7 @@ String blog = executor.run(aiPipeline, "Write about AI", context);
 <dependency>
   <groupId>com.github.11divyansh</groupId>
   <artifactId>Oxyjen</artifactId>
-  <version>v0.1.0</version>
+  <version>v0.2.0</version>
 </dependency>
 ```
 
@@ -350,7 +343,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:Oxyjen:v0.1.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.2.0'
 }
 ```
 
@@ -365,6 +358,7 @@ After installation, verify by importing:
 
 ```java
 import io.oxyjen.core.*;
+import io.oxyjen.llm.*;
 ```
 ---
 
