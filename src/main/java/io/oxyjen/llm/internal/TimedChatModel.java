@@ -45,10 +45,9 @@ public final class TimedChatModel implements ChatModel {
             future.cancel(true);
             
             throw new TimeoutException(
-                "LLM call exceeded timeout of " + timeout.toSeconds() + "s",
-                "Model: " + delegate.getClass().getSimpleName() + "\n" +
-                "Timeout: " + timeout.toSeconds() + "s\n" +
-                "Input length: " + input.length() + " chars"
+                delegate.getClass().getSimpleName(),
+                timeout,
+                input.length()
             );
             
         } catch (ExecutionException e) {
