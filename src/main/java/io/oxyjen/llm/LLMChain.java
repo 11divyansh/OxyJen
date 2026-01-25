@@ -8,6 +8,7 @@ import io.oxyjen.llm.exceptions.LLMException;
 import io.oxyjen.llm.exceptions.NetworkException;
 import io.oxyjen.llm.exceptions.RateLimitException;
 import io.oxyjen.llm.exceptions.TimeoutException;
+import io.oxyjen.llm.internal.TimedChatModel;
 
 /**
 * Production-ready ChatModel with fallbacks and retries.
@@ -38,14 +39,25 @@ public final class LLMChain implements ChatModel {
    private final ChatModel primary;
    private final List<ChatModel> fallbacks;
    private final int maxRetries;
-   private final Duration timeout;
    private final boolean exponentialBackoff;
    
    private LLMChain(Builder builder) {
-       this.primary = builder.primary;
-       this.fallbacks = builder.fallbacks;
+	   // Wrap primary with timeout
+	   if (builder.timeout != null) {
+		   this.primary= new TimedChatModel(builder.primary, builder.timeout);
+	   } else {
+		   this.primary = builder.primary;
+	   }
+	   // Wrap fallbacks with timeout
+       this.fallbacks = new ArrayList<>(builder.fallbacks.size());
+       for (ChatModel fallback : builder.fallbacks) {
+    	   if (builder.timeout != null) {
+    		   this.fallbacks.add(new TimedChatModel(fallback, builder.timeout));
+    	   } else {
+    		   this.fallbacks.add(fallback);
+    	   }
+       } 
        this.maxRetries = builder.maxRetries;
-       this.timeout = builder.timeout;
        this.exponentialBackoff = builder.exponentialBackoff;
    }
    
@@ -139,7 +151,7 @@ public final class LLMChain implements ChatModel {
        private ChatModel primary;
        private List<ChatModel> fallbacks = new ArrayList<>();
        private int maxRetries = 3;
-       private Duration timeout = Duration.ofSeconds(30);
+       private Duration timeout = null;
        private boolean exponentialBackoff = true;
        
        /**
