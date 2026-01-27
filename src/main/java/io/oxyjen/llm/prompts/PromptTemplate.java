@@ -1,7 +1,13 @@
 package io.oxyjen.llm.prompts;
 
-import java.util.*;
-import java.util.regex.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import io.oxyjen.llm.prompts.exception.TemplateException;
 
 /**
  * Template engine for prompts with variable substitution.
@@ -65,8 +71,9 @@ public final class PromptTemplate {
         for (Variable var : variables.values()) {
             if (var.isRequired() && !allValues.containsKey(var.name())) {
                 throw new TemplateException(
-                    "Missing required variable: " + var.name(),
-                    "Template: " + template
+                    "Missing required variable",
+                    template,
+                    var.name()
                 );
             }
         }
