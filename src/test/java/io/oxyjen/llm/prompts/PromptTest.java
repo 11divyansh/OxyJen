@@ -143,5 +143,11 @@ public class PromptTest {
         print("result",result);
         assertEquals("Hello ", result);
     }
-
+    @Test
+    void testOddVarargsThrows() {
+        PromptTemplate template = PromptTemplate.of("Hello {{name}}");
+        assertThrows(IllegalArgumentException.class, () -> {
+            template.render("name");
+        });
+    }
 }
