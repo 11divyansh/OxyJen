@@ -62,6 +62,40 @@ public class PromptTest {
     	assertEquals("Hello Divyansh, role:guest",result);
     }
     
-    
+    @Test
+    void testMultilineTemplateRendering() {
+
+    	log("Multiline template test");
+        PromptTemplate template = PromptTemplate.of(
+            """
+            You are a helpful assistant.
+
+            User: {{user}}
+            Question: {{question}}
+
+            Please answer in {{language}}.
+            """,
+            Variable.required("user"),
+            Variable.required("question"),
+            Variable.optional("language", "English")
+        );
+
+        String result = template.render(
+            "user", "Divyansh",
+            "question", "What is Oxyjen?",
+            "language", "English"
+        );
+        print("result",result);
+        String expected = """
+            You are a helpful assistant.
+
+            User: Divyansh
+            Question: What is Oxyjen?
+
+            Please answer in English.
+            """;
+
+        assertEquals(expected, result);
+    }
 
 }
