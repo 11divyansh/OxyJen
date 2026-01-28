@@ -30,5 +30,19 @@ public class PromptTest {
         
         assertEquals("Hello Alice, you are 25 years old", result);
     }
+    
+    @Test
+    void testRequiredVariables() {
+    	log("Testing Required variables");
+    	PromptTemplate template = PromptTemplate.of(
+    		"hello {{user}}",
+    		Variable.required("user")
+    	);
+    	String result = template.render(
+    			"user","Divyansh"
+    	);
+    	print("result",result);
+    	assertEquals("hello Divyansh", result);
+    }
 
 }
