@@ -44,5 +44,18 @@ public class PromptTest {
     	print("result",result);
     	assertEquals("hello Divyansh", result);
     }
+    
+    @Test
+    void testOptionalVariables() {
+    	log("Testing Required Variables");
+    	PromptTemplate template = PromptTemplate.of(
+    			"Hello {{name}}, role:{{role}}",
+    			Variable.required("name"),
+    			Variable.optional("role", "guest")	
+    	);
+    	String result = template.render("name","Divyansh");
+    	print("result",result);
+    	assertEquals("Hello Divyansh, role:guest",result);
+    }
 
 }
