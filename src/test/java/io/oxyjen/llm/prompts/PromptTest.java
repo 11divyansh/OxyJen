@@ -97,5 +97,31 @@ public class PromptTest {
 
         assertEquals(expected, result);
     }
+    @Test
+    void testMissingOneRequiredVariable() {
+        PromptTemplate template = PromptTemplate.of(
+            "Hello {{name}} from {{city}}",
+            Variable.required("name"),
+            Variable.required("city")
+        );
+
+        assertThrows(TemplateException.class, () -> {
+            template.render("name", "Divyansh");
+        });
+    }
+    @Test
+    void testExtraVariablesIgnored() {
+        PromptTemplate template = PromptTemplate.of(
+            "Hello {{name}}",
+            Variable.required("name")
+        );
+
+        String result = template.render(
+            "name", "Divyansh",
+            "unused", "value"
+        );
+        print("result",result);
+        assertEquals("Hello Divyansh", result);
+    }
 
 }
