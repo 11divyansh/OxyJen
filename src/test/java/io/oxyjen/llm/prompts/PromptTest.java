@@ -123,5 +123,16 @@ public class PromptTest {
         print("result",result);
         assertEquals("Hello Divyansh", result);
     }
+    @Test
+    void testRepeatedVariable() {
+        PromptTemplate template = PromptTemplate.of(
+            "{{name}} is great. Yes, {{name}}!",
+            Variable.required("name")
+        );
+
+        String result = template.render("name", "Oxyjen");
+        print("result",result);
+        assertEquals("Oxyjen is great. Yes, Oxyjen!", result);
+    }
 
 }
