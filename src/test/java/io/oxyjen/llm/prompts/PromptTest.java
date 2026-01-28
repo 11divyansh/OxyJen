@@ -134,5 +134,14 @@ public class PromptTest {
         print("result",result);
         assertEquals("Oxyjen is great. Yes, Oxyjen!", result);
     }
+    @Test
+    void testNullValueRendersEmpty() {
+        PromptTemplate template = PromptTemplate.of(
+            "Hello {{name}}"
+        );
+        String result = template.render("name", null);
+        print("result",result);
+        assertEquals("Hello ", result);
+    }
 
 }
