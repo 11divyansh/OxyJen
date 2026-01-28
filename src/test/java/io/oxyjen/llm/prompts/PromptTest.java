@@ -1,8 +1,13 @@
 package io.oxyjen.llm.prompts;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.HashMap;
 
 import org.junit.jupiter.api.Test;
+
+import io.oxyjen.llm.prompts.exception.TemplateException;
 
 public class PromptTest {
 	
@@ -38,11 +43,10 @@ public class PromptTest {
     		"hello {{user}}",
     		Variable.required("user")
     	);
-    	String result = template.render(
-    			"user","Divyansh"
-    	);
-    	print("result",result);
-    	assertEquals("hello Divyansh", result);
+    	
+    	assertThrows(TemplateException.class,()->{
+    		template.render(new HashMap<>());
+    	});
     }
     
     @Test
@@ -57,5 +61,7 @@ public class PromptTest {
     	print("result",result);
     	assertEquals("Hello Divyansh, role:guest",result);
     }
+    
+    
 
 }
