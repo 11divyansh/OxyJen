@@ -166,4 +166,18 @@ public class PromptTest {
         print("result",result);
         assertEquals("Hello world", result);
     }
+    @Test
+    void testAutoCreatedVariables() {
+        log("Testing auto created variables");
+
+        PromptTemplate template = PromptTemplate.of(
+            "Hello {{name}}, welcome to {{city}}"
+        );
+        String result = template.render(
+            "name", "Divyansh"
+        );
+        print("result", result);
+        // city will be auto created as optional with empty default
+        assertEquals("Hello Divyansh, welcome to ", result);
+    }
 }
