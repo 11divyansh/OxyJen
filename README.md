@@ -32,7 +32,9 @@ LangChain4j is a solid framework focused on **feature breadth**, lots of integra
 
 Oxyjen is taking a different path, focused on **developer experience and production readiness**
 
-I'm planing on a lot of performance features like, async, project loom, parallel processing, java concurrency for v0.3, features like easiest llm calls and alot of AI agents for v0.2 and manymore.
+Oxyjen is meant for runtime reliability, your graphs will be self-aware and will make sure to provide less failure, even if a node fails, Oxyjen will learn from it and improve.
+
+Features like, async, project loom, parallel processing, java concurrency will lay down the foundation of fail-safe graph structure for Oxyjen.
 
 I'm not here to compete with Langchain4j, I'm here to create a framework for devs.
 
