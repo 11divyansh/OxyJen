@@ -150,4 +150,20 @@ public class PromptTest {
             template.render("name");
         });
     }
+    @Test
+    void testEmptyTemplate() {
+        PromptTemplate template = PromptTemplate.of("");
+        String result = template.render();
+        print("empty result",result);
+        assertEquals("", result);
+    }
+    @Test
+    void testTemplateWithoutVariables() {
+    	log("template without variable test");
+        PromptTemplate template = PromptTemplate.of("Hello world");
+
+        String result = template.render();
+        print("result",result);
+        assertEquals("Hello world", result);
+    }
 }
