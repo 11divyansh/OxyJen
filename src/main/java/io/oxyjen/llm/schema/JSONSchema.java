@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class JSONSchema {
     
-    private final String type;
+    private final SchemaType type;
     private final Map<String, PropertySchema> properties;
     private final Set<String> required;
     private final String description;
@@ -28,14 +28,14 @@ public final class JSONSchema {
     }
     
     public static Builder object() {
-        return new Builder("object");
+        return new Builder(SchemaType.OBJECT);
     }
     
     public String toJSON() {
         // Simple JSON representation for OpenAI
         StringBuilder sb = new StringBuilder();
         sb.append("{");
-        sb.append("\"type\":\"").append(type).append("\"");
+        sb.append("\"type\":\"").append(type.json()).append("\"");
         
         if (description != null) {
             sb.append(",\"description\":\"").append(description).append("\"");
@@ -77,12 +77,12 @@ public final class JSONSchema {
     }
     
     public static class Builder {
-        private final String type;
+        private final SchemaType type;
         private final Map<String, PropertySchema> properties = new LinkedHashMap<>();
         private final Set<String> required = new HashSet<>();
         private String description;
         
-        private Builder(String type) {
+        private Builder(SchemaType type) {
             this.type = type;
         }
         
@@ -107,35 +107,35 @@ public final class JSONSchema {
     }
     
     public static class PropertySchema {
-        private final String type;
+        private final SchemaType type;
         private final String description;
         private final List<String> enumValues;
         
-        private PropertySchema(String type, String description, List<String> enumValues) {
+        private PropertySchema(SchemaType type, String description, List<String> enumValues) {
             this.type = type;
             this.description = description;
             this.enumValues = enumValues;
         }
         
         public static PropertySchema string(String description) {
-            return new PropertySchema("string", description, null);
+            return new PropertySchema(SchemaType.STRING, description, null);
         }
         
         public static PropertySchema number(String description) {
-            return new PropertySchema("number", description, null);
+            return new PropertySchema(SchemaType.NUMBER, description, null);
         }
         
         public static PropertySchema bool(String description) {
-            return new PropertySchema("boolean", description, null);
+            return new PropertySchema(SchemaType.BOOLEAN, description, null);
         }
         
         public static PropertySchema enumOf(String description, String... values) {
-            return new PropertySchema("string", description, Arrays.asList(values));
+            return new PropertySchema(SchemaType.STRING, description, Arrays.asList(values));
         }
         
         public String toJSON() {
             StringBuilder sb = new StringBuilder();
-            sb.append("{\"type\":\"").append(type).append("\"");
+            sb.append("{\"type\":\"").append(type.json()).append("\"");
             
             if (description != null) {
                 sb.append(",\"description\":\"").append(description).append("\"");
@@ -154,4 +154,20 @@ public final class JSONSchema {
             return sb.toString();
         }
     }
+}
+enum SchemaType {
+	STRING("string"),
+	NUMBER("number"),
+	BOOLEAN("boolean"),
+	OBJECT("object");
+
+	private final String json;
+
+	SchemaType(String json) {
+		this.json = json;
+	}
+
+	public String json() {
+		return json;
+	}
 }
