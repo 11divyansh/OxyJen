@@ -58,8 +58,7 @@ public final class LLMNode implements NodePlugin<String, String> {
     public String getName() {
         return "LLM[" + model.getClass().getSimpleName() + "]";
     }
-    
-    // ========== Builder ==========
+   
     
     public static Builder builder() {
         return new Builder();
