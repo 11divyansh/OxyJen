@@ -133,6 +133,14 @@ public final class JSONSchema {
             return new PropertySchema(SchemaType.STRING, description, Arrays.asList(values));
         }
         
+        public SchemaType type() {
+        	return type;
+        }
+        
+        public List<String> enumValues(){
+        	return enumValues;
+        }
+        
         public String toJSON() {
             StringBuilder sb = new StringBuilder();
             sb.append("{\"type\":\"").append(type.json()).append("\"");
