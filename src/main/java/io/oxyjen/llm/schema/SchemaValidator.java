@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Validates JSON strings against a schema.
@@ -101,6 +102,15 @@ public final class SchemaValidator {
                 	}
                 	default -> {}
                 }
+                if (prop.enumValues() != null && !prop.enumValues().contains(value.toString())) {
+                	errors.add(new FieldError(
+                			"$." + fieldName,
+                			FieldError.ErrorType.INVALID_ENUM_VALUE,
+                			prop.enumValues(),
+                			value,
+                			"Value not in enum"
+                	));
+                }
             }
             
         } catch (Exception e) {
@@ -152,7 +162,23 @@ public final class SchemaValidator {
         }
         
         public List<FieldError> errors() {
-            return new ArrayList<>(errors);
+            return List.copyOf(errors);
+        }
+        
+        public boolean hasErrors() {
+        	return !errors.isEmpty();
+        }
+
+        public List<FieldError> getErrorsForField(String fieldPath) {
+        	return errors.stream()
+        			.filter(e -> e.fieldPath().equals(fieldPath))
+        			.toList();
+        }
+
+        public String formatErrors() {
+        	return errors.stream()
+        			.map(FieldError::toString)
+        			.collect(Collectors.joining("\n"));
         }
     }
 }
