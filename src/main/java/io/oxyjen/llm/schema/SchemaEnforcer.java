@@ -65,7 +65,7 @@ public final class SchemaEnforcer {
         
         throw new SchemaException(
             "Failed to get valid JSON after " + maxRetries + " attempts",
-            "Last response: " + lastResponse + "\n"
+            lastResponse
         );
     }
     
