@@ -7,8 +7,6 @@ import java.util.HashMap;
 
 import org.junit.jupiter.api.Test;
 
-import io.oxyjen.llm.prompts.exception.TemplateException;
-
 public class PromptTest {
 	
 	private void log(String title) {

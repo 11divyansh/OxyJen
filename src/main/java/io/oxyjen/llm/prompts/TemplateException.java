@@ -1,4 +1,4 @@
-package io.oxyjen.llm.prompts.exception;
+package io.oxyjen.llm.prompts;
 
 
 /**

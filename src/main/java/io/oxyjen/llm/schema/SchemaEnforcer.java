@@ -1,7 +1,5 @@
 package io.oxyjen.llm.schema;
 
-import java.util.List;
-
 import io.oxyjen.llm.ChatModel;
 
 /**
@@ -48,7 +46,7 @@ public final class SchemaEnforcer {
             String response = model.chat(enhancedPrompt);
             lastResponse = response;
             
-            // Extract JSON (remove markdown fences if present)
+            // Extract JSON (removing markdown fences (if present))
             String json = extractJSON(response);
             
             // Validate
@@ -58,8 +56,6 @@ public final class SchemaEnforcer {
                 return json; // Success!
             }
             
-            // Build error feedback for retry
-            //astErrors = String.join("\n", result.errors());
             enhancedPrompt = buildRetryPrompt(prompt, json, result,attempt);
         }
         

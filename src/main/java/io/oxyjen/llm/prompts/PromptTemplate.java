@@ -7,8 +7,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import io.oxyjen.llm.prompts.exception.TemplateException;
-
 /**
  * Template engine for prompts with variable substitution.
  * 
