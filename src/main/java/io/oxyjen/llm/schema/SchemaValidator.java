@@ -148,6 +148,10 @@ public final class SchemaValidator {
         return result;
     }
     
+    public Map<String, Object> parseToMap(String json){
+    	return parseJSON(json);
+    }
+    
     public static class ValidationResult {
         private final boolean valid;
         private final List<FieldError> errors;
