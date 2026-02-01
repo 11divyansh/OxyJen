@@ -11,13 +11,14 @@ import io.oxyjen.llm.exceptions.TimeoutException;
 import io.oxyjen.llm.internal.TimedChatModel;
 
 /**
-* Production-ready ChatModel with fallbacks and retries.
+* ChatModel with fallbacks and retries.
 * 
 * Features:
 * - Primary + multiple fallback models
 * - Automatic retries with exponential backoff
 * - Timeout protection
 * - Error classification
+* - Jitter & Retry cap
 * 
 * This is Layer 3 (Execution Control).
 * 
@@ -40,6 +41,8 @@ public final class LLMChain implements ChatModel {
    private final List<ChatModel> fallbacks;
    private final int maxRetries;
    private final boolean exponentialBackoff;
+   private final Duration maxBackoff;      
+   private final double jitterFactor;
    
    private LLMChain(Builder builder) {
 	   // Wrap primary with timeout
@@ -59,6 +62,8 @@ public final class LLMChain implements ChatModel {
        } 
        this.maxRetries = builder.maxRetries;
        this.exponentialBackoff = builder.exponentialBackoff;
+       this.maxBackoff = builder.maxBackoff;        
+       this.jitterFactor = builder.jitterFactor;
    }
    
    @Override
@@ -118,11 +123,35 @@ public final class LLMChain implements ChatModel {
    }
    
    private long calculateBackoff(int attempt) {
-       if (!exponentialBackoff) {
-           return 1000;
-       }
-       // Exponential: 1s, 2s, 4s, 8s...
-       return (long) Math.pow(2, attempt - 1) * 1000;
+	// 1. Calculate base delay
+	    Duration base;
+	    if (exponentialBackoff) {
+	        // Exponential: 1s, 2s, 4s, 8s, 16s....
+	        // 1 << (attempt-1) = 2^(attempt-1)
+	        long seconds = 1L << (attempt - 1);
+	        base = Duration.ofSeconds(seconds);
+	    } else {
+	        // Fixed: always 1s
+	        base = Duration.ofSeconds(1);
+	    }
+	    
+	    // 2. Apply cap (if set)
+	    if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
+	        base = maxBackoff;
+	    }
+	    
+	    // 3. Apply jitter (if enabled)
+	    if (jitterFactor > 0) {
+	        // Random multiplier between (1 - jitterFactor) and (1 + jitterFactor)
+	        // Example: jitterFactor=0.2 → range is 0.8 to 1.2
+	        double jitterMultiplier = java.util.concurrent.ThreadLocalRandom.current()
+	            .nextDouble(1.0 - jitterFactor, 1.0 + jitterFactor);
+	        
+	        long jitteredMs = (long) (base.toMillis() * jitterMultiplier);
+	        base = Duration.ofMillis(jitteredMs);
+	    }
+	    
+	    return base.toMillis();
    }
    
    private void sleep(long ms) {
@@ -153,6 +182,8 @@ public final class LLMChain implements ChatModel {
        private int maxRetries = 3;
        private Duration timeout = null;
        private boolean exponentialBackoff = true;
+       private Duration maxBackoff = null;     
+       private double jitterFactor = 0.0;
        
        /**
         * Set primary model (required).
@@ -215,6 +246,31 @@ public final class LLMChain implements ChatModel {
         */
        public Builder fixedBackoff() {
            this.exponentialBackoff = false;
+           return this;
+       }
+       
+       /**
+        * Set maximum backoff duration (caps exponential growth).
+        * Example: maxBackoff(Duration.ofSeconds(10))
+        */
+       public Builder maxBackoff(Duration maxBackoff) {
+           this.maxBackoff = maxBackoff;
+           return this;
+       }
+
+       /**
+        * Enable jitter to randomize retry delays.
+        * @param factor Jitter factor (0.0 to 1.0). 
+        *               0.2 means ±20% randomness.
+        * Example: jitter(0.2)
+        */
+       public Builder jitter(double factor) {
+           if (factor < 0 || factor > 1) {
+               throw new IllegalArgumentException(
+                   "Jitter factor must be between 0 and 1, got: " + factor
+               );
+           }
+           this.jitterFactor = factor;
            return this;
        }
        
