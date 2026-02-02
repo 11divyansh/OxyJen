@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 
@@ -63,5 +64,26 @@ public class LLMChainJitterRetryTest {
 	    print("d2",d2);
 	    assertEquals(d1, d2);
 	}
+	
+	@Test
+	void backoffIsCapped() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+		log("Capped backoff");
+	    Duration duration = Duration.ofSeconds(2);
+	    Long cap = duration.getSeconds();
+
+	    LLMChain chain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(10)
+	        .exponentialBackoff()
+	        .maxBackoff(duration)
+	        .build();
+
+	    Method method = LLMChain.class.getDeclaredMethod("calculateBackoff", int.class);
+	    method.setAccessible(true);
+	    Long d5 = (Long)method.invoke(chain, 5);
+	    print("d5",d5);
+	    assertTrue(d5.compareTo(cap) <= 2);
+	}
+
 
 }
