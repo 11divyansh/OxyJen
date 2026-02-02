@@ -117,5 +117,23 @@ public class LLMChainJitterRetryTest {
 	        assertTrue(d <= max);
 	    }
 	}
+	@Test
+	void zeroJitterIsDeterministic()throws Exception {
+		log("Zero jitter");
+	    LLMChain chain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(3)
+	        .fixedBackoff()
+	        .jitter(0.0)
+	        .build();
+
+	    Method method =LLMChain.class.getDeclaredMethod("calculateBackoff", int.class);
+	    method.setAccessible(true);
+	    long d1 = (long) method.invoke(chain, 1);
+	    long d2 = (long) method.invoke(chain, 1);	   
+	    System.out.println(d1+" "+d2);
+	    assertEquals(d1, d2);
+	}
+
 
 }
