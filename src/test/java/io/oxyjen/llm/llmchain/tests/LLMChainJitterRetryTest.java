@@ -134,6 +134,27 @@ public class LLMChainJitterRetryTest {
 	    System.out.println(d1+" "+d2);
 	    assertEquals(d1, d2);
 	}
+	@Test
+	void jitterDoesNotExceedCap() throws Exception {
+		log("Jitter does not exceed cap");
+	    Duration duration = Duration.ofSeconds(1);
+	    long cap = duration.toMillis();
 
+	    LLMChain chain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(5)
+	        .exponentialBackoff()
+	        .maxBackoff(duration)
+	        .jitter(0.5)
+	        .build();
+
+	    Method method =LLMChain.class.getDeclaredMethod("calculateBackoff", int.class);
+	    method.setAccessible(true);
+	    for (int i = 0; i < 10; i++) {
+	    	long d = (long) method.invoke(chain, 5);
+	    	out.println("Cap:"+cap+" D:"+d);
+	        assertTrue(d<=cap);
+	    }
+	}
 
 }

@@ -123,7 +123,7 @@ public final class LLMChain implements ChatModel {
    }
    
    private long calculateBackoff(int attempt) {
-	// 1. Calculate base delay
+	   // 1. Calculate base delay
 	    Duration base;
 	    if (exponentialBackoff) {
 	        // Exponential: 1s, 2s, 4s, 8s, 16s....
@@ -135,21 +135,20 @@ public final class LLMChain implements ChatModel {
 	        base = Duration.ofSeconds(1);
 	    }
 	    
-	    // 2. Apply cap (if set)
-	    if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
-	        base = maxBackoff;
-	    }
-	    
-	    // 3. Apply jitter (if enabled)
+	    // 2. Apply jitter first(if enabled)
 	    if (jitterFactor > 0) {
-	        // Random multiplier between (1 - jitterFactor) and (1 + jitterFactor)
-	        // Example: jitterFactor=0.2 -> range is 0.8 to 1.2
-	        double jitterMultiplier = java.util.concurrent.ThreadLocalRandom.current()
-	            .nextDouble(1.0 - jitterFactor, 1.0 + jitterFactor);
-	        
+	    	// Ex: jitterFactor=0.2 -> range is 0.8 to 1.2
+	        double jitterMultiplier =java.util.concurrent.ThreadLocalRandom.current()
+	                .nextDouble(1.0 - jitterFactor, 1.0 + jitterFactor);
+
 	        long jitteredMs = (long) (base.toMillis() * jitterMultiplier);
 	        base = Duration.ofMillis(jitteredMs);
 	    }
+
+	    // 3. Apply cap last(if set)
+	    if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
+	        base = maxBackoff;
+	    }  
 	    
 	    return base.toMillis();
    }
