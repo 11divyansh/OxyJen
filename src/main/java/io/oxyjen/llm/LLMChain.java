@@ -143,7 +143,7 @@ public final class LLMChain implements ChatModel {
 	    // 3. Apply jitter (if enabled)
 	    if (jitterFactor > 0) {
 	        // Random multiplier between (1 - jitterFactor) and (1 + jitterFactor)
-	        // Example: jitterFactor=0.2 → range is 0.8 to 1.2
+	        // Example: jitterFactor=0.2 -> range is 0.8 to 1.2
 	        double jitterMultiplier = java.util.concurrent.ThreadLocalRandom.current()
 	            .nextDouble(1.0 - jitterFactor, 1.0 + jitterFactor);
 	        
@@ -254,6 +254,9 @@ public final class LLMChain implements ChatModel {
         * Example: maxBackoff(Duration.ofSeconds(10))
         */
        public Builder maxBackoff(Duration maxBackoff) {
+    	   if (maxBackoff.isZero() || maxBackoff.isNegative()) {
+    		    throw new IllegalArgumentException("maxBackoff must be positive");
+    	   }
            this.maxBackoff = maxBackoff;
            return this;
        }
