@@ -2,6 +2,7 @@ package io.oxyjen.llm.llmchain.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static java.lang.System.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -85,5 +86,36 @@ public class LLMChainJitterRetryTest {
 	    assertTrue(d5.compareTo(cap) <= 2);
 	}
 
+	@Test
+	void jitterWithinBounds() throws Exception {
+		log("Jitter with bounds");
+		double jitter = 0.2;
+	    LLMChain baseChain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(3)
+	        .fixedBackoff()
+	        .build();
+	   
+	    LLMChain jitterChain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(3)
+	        .fixedBackoff()
+	        .jitter(jitter)
+	        .build();
+
+	    Method method =LLMChain.class.getDeclaredMethod("calculateBackoff", int.class);
+	    method.setAccessible(true);
+
+	    long base = (long) method.invoke(baseChain, 1);
+	    long min = (long)(base * (1 - jitter));
+	    long max = (long)(base * (1 + jitter));
+	    for (int i = 0; i < 20; i++) {
+	        long d = (long) method.invoke(jitterChain, 1);
+	        System.out.println(d+">="+min);
+	        System.out.println(d+"<="+max);
+	        assertTrue(d >= min);
+	        assertTrue(d <= max);
+	    }
+	}
 
 }
