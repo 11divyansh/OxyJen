@@ -1,10 +1,10 @@
 package io.oxyjen.llm.llmchain.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +45,23 @@ public class LLMChainJitterRetryTest {
 	    assertTrue(d2.compareTo(d1) > 0);
 	    assertTrue(d3.compareTo(d2) > 0);
 	}
+	
+	@Test
+	void fixedBackoffIsConstant() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+		log("Fixed backoff stays constant");
+	    LLMChain chain = LLMChain.builder()
+	        .primary(new NoopModel())
+	        .retry(5)
+	        .fixedBackoff()
+	        .build();
+	    Method method = LLMChain.class.getDeclaredMethod("calculateBackoff", int.class);
+	    method.setAccessible(true);
+	    Long d1 = (Long)method.invoke(chain, 1);
+	    Long d2 = (Long)method.invoke(chain, 2);
 
+	    print("d1",d1);
+	    print("d2",d2);
+	    assertEquals(d1, d2);
+	}
 
 }
