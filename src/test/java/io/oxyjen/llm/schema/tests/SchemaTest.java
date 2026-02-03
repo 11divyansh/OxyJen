@@ -44,5 +44,19 @@ public class SchemaTest {
 	    assertTrue(json.contains("\"required\""));
 	}
 
+	@Test
+	void enumSchemaSerialized() {
+		log("Enum schema builder");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("status",
+	            PropertySchema.enumOf("Status", "open","closed"))
+	        .build();
+
+	    String json = schema.toJSON();
+	    out.println(json);
+	    assertTrue(json.contains("\"enum\""));
+	    assertTrue(json.contains("open"));
+	}
+
 
 }
