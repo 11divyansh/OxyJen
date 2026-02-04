@@ -6,11 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
+import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.schema.FieldError;
 import io.oxyjen.llm.schema.JSONSchema;
 import io.oxyjen.llm.schema.JSONSchema.PropertySchema;
+import io.oxyjen.llm.schema.SchemaEnforcer;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.llm.schema.SchemaValidator.ValidationResult;
 
@@ -135,6 +139,36 @@ public class SchemaTest {
 	        FieldError.ErrorType.PARSE_ERROR,
 	        result.errors().get(0).errorType()
 	    );
+	}
+
+	@Test
+	void formatErrorsWorks() {
+		log("Format errors test");
+	    FieldError err =
+	        new FieldError("$.name",
+	            FieldError.ErrorType.MISSING_REQUIRED,
+	            "present",
+	            null,
+	            "Missing");
+	    ValidationResult vr = new ValidationResult(false, List.of(err));
+	    assertTrue(vr.formatErrors().contains("name"));
+	}
+
+	@Test
+	void enforcerRetriesThenSucceeds() {
+		log("Enforcer success on retry");
+	    ChatModel model = new FakeModel(
+	        "bad json",
+	        "{\"name\":\"Alice\"}"
+	    );
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", PropertySchema.string("Name"))
+	        .required("name")
+	        .build();
+	    SchemaEnforcer enforcer = new SchemaEnforcer(model, schema, 2);
+	    String result = enforcer.execute("prompt");
+	    out.println(result);
+	    assertTrue(result.contains("Alice"));
 	}
 
 
