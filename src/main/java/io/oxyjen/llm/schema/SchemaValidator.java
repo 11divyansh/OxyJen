@@ -33,8 +33,17 @@ public final class SchemaValidator {
         List<FieldError> errors = new ArrayList<>();
         
         try {
-            // (simple manual parsing for v0.3)
             Map<String, Object> parsed = parseJSON(json);
+            if (parsed.isEmpty() && json.contains(":")) {
+            	errors.add(new FieldError(
+            	        "$",
+            	        FieldError.ErrorType.PARSE_ERROR,
+            	        "valid JSON",
+            	        json,
+            	        "Unable to parse JSON"
+            	    ));
+            	    return new ValidationResult(false, errors);
+            }
             
             // Check required fields
             for (String required : schema.required()) {

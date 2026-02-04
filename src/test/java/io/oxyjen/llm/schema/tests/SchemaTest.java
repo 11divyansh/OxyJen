@@ -121,6 +121,21 @@ public class SchemaTest {
 	        result.errors().get(0).errorType()
 	    );
 	}
+	@Test
+	void invalidJsonDetected() {
+		log("Invalid json test");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", PropertySchema.string("Name"))
+	        .build();
+	    SchemaValidator validator = new SchemaValidator(schema);
+	    ValidationResult result = validator.validate("{name:Alice}");
+	    out.println(result.errors().get(0).errorType());
+	    assertFalse(result.isValid());
+	    assertEquals(
+	        FieldError.ErrorType.PARSE_ERROR,
+	        result.errors().get(0).errorType()
+	    );
+	}
 
 
 }
