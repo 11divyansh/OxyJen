@@ -90,6 +90,37 @@ public class SchemaTest {
 	        result.errors().get(0).errorType()
 	    );
 	}
+	@Test
+	void wrongTypeDetected() {
+		log("Wrong type detected");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("age", PropertySchema.number("Age"))
+	        .build();
+	    SchemaValidator validator = new SchemaValidator(schema);
+	    ValidationResult result = validator.validate("{\"age\":\"thirty\"}");
+	    out.println(result.errors().get(0).errorType());
+	    assertFalse(result.isValid());
+	    assertEquals(
+	        FieldError.ErrorType.WRONG_TYPE,
+	        result.errors().get(0).errorType()
+	    );
+	}
+	@Test
+	void enumValidationFails() {
+		log("enum validation fails");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("status",PropertySchema.enumOf("Status","open","closed"))
+	        .required("status")
+	        .build();
+	    SchemaValidator validator = new SchemaValidator(schema);
+	    ValidationResult result = validator.validate("{\"status\":\"pending\"}");
+	    out.println(result.errors().get(0).errorType());
+	    assertFalse(result.isValid());
+	    assertEquals(
+	        FieldError.ErrorType.INVALID_ENUM_VALUE,
+	        result.errors().get(0).errorType()
+	    );
+	}
 
 
 }
