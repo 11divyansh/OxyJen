@@ -4,17 +4,22 @@ import static java.lang.System.out;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.schema.FieldError;
 import io.oxyjen.llm.schema.JSONSchema;
 import io.oxyjen.llm.schema.JSONSchema.PropertySchema;
 import io.oxyjen.llm.schema.SchemaEnforcer;
+import io.oxyjen.llm.schema.SchemaException;
+import io.oxyjen.llm.schema.SchemaNode;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.llm.schema.SchemaValidator.ValidationResult;
 
@@ -171,5 +176,38 @@ public class SchemaTest {
 	    assertTrue(result.contains("Alice"));
 	}
 
+	@Test
+	void enforcerFailsAfterMaxRetries() {
+		log("Enforcer fails on max retries");
+	    ChatModel model = new FakeModel("bad","bad","bad");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", PropertySchema.string("Name"))
+	        .required("name")
+	        .build();
+	    SchemaEnforcer enforcer = new SchemaEnforcer(model, schema, 2);
+	    try {
+	    	enforcer.execute("prompt");
+	    }catch(SchemaException e) {
+	    	out.println(e.getMessage());
+	    }
+	    assertThrows(SchemaException.class,
+	        () -> enforcer.execute("prompt"));
+	}
 
+	@Test
+	void schemaNodeReturnsMap() {
+		log("Schema node map test");
+	    ChatModel model = new FakeModel("{\"name\":\"Bob\"}");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", PropertySchema.string("Name"))
+	        .required("name")
+	        .build();
+	    SchemaNode node = SchemaNode.builder()
+	        .model(model)
+	        .schema(schema)
+	        .build();
+	    Map<String,Object> result = node.process("prompt", new NodeContext());
+	    out.println(result);
+	    assertEquals("Bob", result.get("name"));
+	}
 }
