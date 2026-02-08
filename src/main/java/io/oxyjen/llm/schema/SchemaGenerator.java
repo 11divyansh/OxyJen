@@ -2,6 +2,8 @@ package io.oxyjen.llm.schema;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -11,8 +13,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import io.oxyjen.llm.schema.annotations.Description;
-import io.oxyjen.llm.schema.annotations.Size;
+import io.oxyjen.llm.schema.annotations.JsonIgnore;
 import io.oxyjen.llm.schema.annotations.Pattern;
+import io.oxyjen.llm.schema.annotations.Size;
 
  /**
  * Generates JSON schemas from Java classes using reflection.
@@ -72,8 +75,7 @@ public final class SchemaGenerator {
         if (clazz.isRecord()) {
         	return fromRecord(clazz);
         } else {
-            // handler 2
-        	return null;
+            return fromPOJO(clazz);
         }
     }
     /**
@@ -89,6 +91,10 @@ public final class SchemaGenerator {
             String fieldName = component.getName();
             Class<?> fieldType = component.getType();
             
+            // skip @JsonIgnore record components
+            if (component.isAnnotationPresent(JsonIgnore.class)) {
+                continue;
+            }
             // Get description
             String description = getDescription(component);
             
@@ -118,6 +124,59 @@ public final class SchemaGenerator {
         }
         
         String classDescription = getClassDescription(recordClass);
+        if (classDescription != null) {
+            builder.description(classDescription);
+        }
+        
+        return builder.build();
+    }
+    /**
+     * Generate schema from a POJO
+     */
+    private static JSONSchema fromPOJO(Class<?> pojoClass) {
+        JSONSchema.Builder builder = JSONSchema.object();
+        
+        List<String> requiredFields = new ArrayList<>();
+        
+        Method[] methods = pojoClass.getMethods();
+        
+        for (Method method : methods) {
+            // skip non-getters
+            if (!isGetter(method)) {
+                continue;
+            }
+            
+            if (method.isAnnotationPresent(JsonIgnore.class)) {
+                continue;
+            }
+            
+            String fieldName = getFieldNameFromGetter(method);
+            Class<?> fieldType = method.getReturnType();
+            Type genericType = method.getGenericReturnType();
+            
+            String description = getDescriptionFromMethod(method);
+            
+            boolean optional = isOptionalMethod(method);
+            
+            JSONSchema.PropertySchema property = createProperty(
+                fieldType,
+                genericType,
+                description,
+                method
+            );
+            
+            builder.property(fieldName, property);
+            
+            if (!optional) {
+                requiredFields.add(fieldName);
+            }
+        }
+        
+        if (!requiredFields.isEmpty()) {
+            builder.required(requiredFields.toArray(new String[0]));
+        }
+        
+        String classDescription = getClassDescription(pojoClass);
         if (classDescription != null) {
             builder.description(classDescription);
         }
@@ -169,11 +228,78 @@ public final class SchemaGenerator {
         return builder.build();
     }
     /**
+     * Check if method is a getter.
+     */
+    private static boolean isGetter(Method method) {
+        // must start with "get" or "is"
+        String name = method.getName();
+        if (!name.startsWith("get") && !name.startsWith("is")) {
+            return false;
+        }
+        
+        if (method.getParameterCount() != 0) {
+            return false;
+        }
+        
+        if (method.getReturnType() == void.class) {
+            return false;
+        }
+        
+        // "is" for boolean
+        if (name.startsWith("is")) {
+            return method.getReturnType() == boolean.class ||
+                   method.getReturnType() == Boolean.class;
+        }
+        
+        return true;
+    }
+    /**
+     * Extract field name from getter method.
+     * 
+     * getName() -> name
+     * isActive() -> active
+     */
+    private static String getFieldNameFromGetter(Method method) {
+        String name = method.getName();
+        
+        if (name.startsWith("is")) {
+            name = name.substring(2);
+        } else if (name.startsWith("get")) {
+            name = name.substring(3);
+        }
+        
+        // first character lowercase
+        return Character.toLowerCase(name.charAt(0)) + name.substring(1);
+    }
+    /**
      * Get description from RecordComponent.
      */
     private static String getDescription(RecordComponent component) {
         Description annotation = component.getAnnotation(Description.class);
         return annotation != null ? annotation.value() : component.getName();
+    }
+    /**
+     * Get description from Method (for POJOs).
+     */
+    private static String getDescriptionFromMethod(Method method) {
+        Description annotation = method.getAnnotation(Description.class);
+        if (annotation != null) {
+            return annotation.value();
+        }
+        
+        // try to get from field
+        try {
+            String fieldName = getFieldNameFromGetter(method);
+            Field field = method.getDeclaringClass().getDeclaredField(fieldName);
+            annotation = field.getAnnotation(Description.class);
+            if (annotation != null) {
+                return annotation.value();
+            }
+        } catch (NoSuchFieldException e) {
+            // field not found, use method name
+        }
+        
+        return getFieldNameFromGetter(method);
     }
     /**
      * Check if RecordComponent is optional.
@@ -189,6 +315,36 @@ public final class SchemaGenerator {
         
         // Check if type is Optional
         return component.getType() == Optional.class;
+    }
+    /**
+     * check if Method (POJO getter) is optional.
+     */
+    private static boolean isOptionalMethod(Method method) {
+        // check @Nullable on method
+        for (Annotation annotation : method.getAnnotations()) {
+            String name = annotation.annotationType().getSimpleName();
+            if (name.equals("Nullable") || name.equals("Optional")) {
+                return true;
+            }
+        }
+        
+        // check @Nullable on field
+        try {
+            String fieldName = getFieldNameFromGetter(method);
+            Field field = method.getDeclaringClass().getDeclaredField(fieldName);
+            
+            for (Annotation annotation : field.getAnnotations()) {
+                String name = annotation.annotationType().getSimpleName();
+                if (name.equals("Nullable") || name.equals("Optional")) {
+                    return true;
+                }
+            }
+        } catch (NoSuchFieldException e) {
+            // field not found
+        }
+        
+        // check if return type is Optional
+        return method.getReturnType() == Optional.class;
     }
     /**
      * Get class-level description.
