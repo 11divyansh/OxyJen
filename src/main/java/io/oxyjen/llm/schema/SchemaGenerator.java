@@ -1,7 +1,15 @@
 package io.oxyjen.llm.schema;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+
+import io.oxyjen.llm.schema.annotations.Description;
 
  /**
  * Generates JSON schemas from Java classes using reflection.
@@ -20,7 +28,7 @@ import java.util.Set;
  * 
  * @version 0.4
  */
-public class SchemaGenerator {
+public final class SchemaGenerator {
 	
 	// Track visited classes to prevent infinite recursion
     private static final ThreadLocal<Set<Class<?>>> VISITED = 
@@ -59,11 +67,87 @@ public class SchemaGenerator {
         
         // Route to appropriate handler
         if (clazz.isRecord()) {
-            // handler 1
-        	return null;
+        	return fromRecord(clazz);
         } else {
             // handler 2
         	return null;
         }
+    }
+    /**
+     * Generate schema from a Java record.
+     */
+    private static JSONSchema fromRecord(Class<?> recordClass) {
+        JSONSchema.Builder builder = JSONSchema.object();
+        
+        RecordComponent[] components = recordClass.getRecordComponents();
+        List<String> requiredFields = new ArrayList<>();
+        
+        for (RecordComponent component : components) {
+            String fieldName = component.getName();
+            Class<?> fieldType = component.getType();
+            
+            // Get description
+            String description = getDescription(component);
+            
+            // Check if field is optional
+            boolean optional = isOptional(component);
+            
+            // Get generic type for collections
+            Type genericType = component.getGenericType();
+            
+            // Create property schema
+            JSONSchema.PropertySchema property = createProperty(
+                fieldType, 
+                genericType, 
+                description,
+                component
+            );
+            
+            builder.property(fieldName, property);
+            
+            if (!optional) {
+                requiredFields.add(fieldName);
+            }
+        }
+        
+        if (!requiredFields.isEmpty()) {
+            builder.required(requiredFields.toArray(new String[0]));
+        }
+        
+        String classDescription = getClassDescription(recordClass);
+        if (classDescription != null) {
+            builder.description(classDescription);
+        }
+        
+        return builder.build();
+    }
+    /**
+     * Get description from RecordComponent.
+     */
+    private static String getDescription(RecordComponent component) {
+        Description annotation = component.getAnnotation(Description.class);
+        return annotation != null ? annotation.value() : component.getName();
+    }
+    /**
+     * Check if RecordComponent is optional.
+     */
+    private static boolean isOptional(RecordComponent component) {
+        // Check @Nullable
+        for (Annotation annotation : component.getAnnotations()) {
+            String name = annotation.annotationType().getSimpleName();
+            if (name.equals("Nullable") || name.equals("Optional")) {
+                return true;
+            }
+        }
+        
+        // Check if type is Optional
+        return component.getType() == Optional.class;
+    }
+    /**
+     * Get class-level description.
+     */
+    private static String getClassDescription(Class<?> clazz) {
+        Description annotation = clazz.getAnnotation(Description.class);
+        return annotation != null ? annotation.value() : null;
     }
 }
