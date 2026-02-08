@@ -5,15 +5,14 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import io.oxyjen.llm.schema.annotations.Description;
+import io.oxyjen.llm.schema.annotations.Size;
+import io.oxyjen.llm.schema.annotations.Pattern;
 
  /**
  * Generates JSON schemas from Java classes using reflection.
