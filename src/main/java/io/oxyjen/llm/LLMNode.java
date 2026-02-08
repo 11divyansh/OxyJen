@@ -7,14 +7,12 @@ import io.oxyjen.core.NodePlugin;
 /**
  * LLM as a first-class graph node.
  * 
- * This is where Oxyjen beats LangChain4j.
- * 
  * Features:
  * - Wraps any ChatModel
  * - Participates fully in graph execution
  * - Uses Memory for conversation history
- * - Logs costs and tokens (v0.3)
- * - Handles errors gracefully
+ * - Logs costs and tokens
+ * - Handles errors
  * 
  * This is Layer 3 (Execution Control).
  * 

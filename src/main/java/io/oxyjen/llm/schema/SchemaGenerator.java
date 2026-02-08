@@ -1,13 +1,17 @@
 package io.oxyjen.llm.schema;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import io.oxyjen.llm.schema.annotations.Description;
 
@@ -117,6 +121,50 @@ public final class SchemaGenerator {
         String classDescription = getClassDescription(recordClass);
         if (classDescription != null) {
             builder.description(classDescription);
+        }
+        
+        return builder.build();
+    }
+    /**
+     * Create a PropertySchema from a Java type.
+     */
+    private static JSONSchema.PropertySchema createProperty(
+            Class<?> type,
+            Type genericType,
+            String description,
+            AnnotatedElement element
+    ) {
+        // Primitives and boxed types
+        if (type == String.class) {
+            return createStringProperty(description, element);
+        }
+        
+        throw new UnsupportedOperationException(
+            "Unsupported type: " + type.getSimpleName() + 
+            ". Supported: primitives, String, enums, Collections, Arrays, Maps, POJOs, Records"
+        );
+    }
+    /**
+     * Create string property with validation.
+     */
+    private static JSONSchema.PropertySchema createStringProperty(
+            String description,
+            AnnotatedElement element
+    ) {
+        JSONSchema.PropertySchema.Builder builder = 
+            JSONSchema.PropertySchema.string(description);
+        
+        // Apply @Pattern validation
+        if (element != null && element.isAnnotationPresent(Pattern.class)) {
+            Pattern pattern = element.getAnnotation(Pattern.class);
+            builder.pattern(pattern.value());
+        }
+        
+        // Apply @Size validation
+        if (element != null && element.isAnnotationPresent(Size.class)) {
+            Size size = element.getAnnotation(Size.class);
+            if (size.min() > 0) builder.minLength(size.min());
+            if (size.max() < Integer.MAX_VALUE) builder.maxLength(size.max());
         }
         
         return builder.build();
