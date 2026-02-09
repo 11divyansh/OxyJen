@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -200,6 +201,12 @@ public final class SchemaGenerator {
         if (isNumericType(type)) {
         	return createNumberProperty(description, element);
         }
+        if (type == boolean.class || type == Boolean.class) {
+            return createBooleanProperty(description, element);
+        }
+        if (type.isEnum()) {
+            return createEnumProperty(type, description);
+        }
         
         throw new UnsupportedOperationException(
             "Unsupported type: " + type.getSimpleName() + 
@@ -216,13 +223,11 @@ public final class SchemaGenerator {
         JSONSchema.PropertySchema.Builder builder = 
             JSONSchema.PropertySchema.string(description);
         
-        // Apply @Pattern validation
         if (element != null && element.isAnnotationPresent(Pattern.class)) {
             Pattern pattern = element.getAnnotation(Pattern.class);
             builder.pattern(pattern.value());
         }
         
-        // Apply @Size validation
         if (element != null && element.isAnnotationPresent(Size.class)) {
             Size size = element.getAnnotation(Size.class);
             if (size.min() > 0) builder.minLength(size.min());
@@ -252,6 +257,30 @@ public final class SchemaGenerator {
         }
         
         return builder.build();
+    }
+    /**
+     * create boolean property.
+     */
+    private static JSONSchema.PropertySchema createBooleanProperty(
+            String description,
+            AnnotatedElement element
+    ) {
+        return JSONSchema.PropertySchema.bool(description).build();
+    }
+    
+    /**
+     * create enum property.
+     */
+    private static JSONSchema.PropertySchema createEnumProperty(
+            Class<?> enumType,
+            String description
+    ) {
+        Object[] enumConstants = enumType.getEnumConstants();
+        String[] values = Arrays.stream(enumConstants)
+            .map(Object::toString)
+            .toArray(String[]::new);
+        
+        return JSONSchema.PropertySchema.enumOf(description, values).build();
     }
     /**
      * Check if type is numeric.
