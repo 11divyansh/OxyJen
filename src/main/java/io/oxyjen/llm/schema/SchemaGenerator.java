@@ -4,10 +4,12 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -98,13 +100,8 @@ public final class SchemaGenerator {
             if (component.isAnnotationPresent(JsonIgnore.class)) {
                 continue;
             }
-            // Get description
             String description = getDescription(component);
-            
-            // Check if field is optional
             boolean optional = isOptional(component);
-            
-            // Get generic type for collections
             Type genericType = component.getGenericType();
             
             // Create property schema
@@ -139,8 +136,7 @@ public final class SchemaGenerator {
     private static JSONSchema fromPOJO(Class<?> pojoClass) {
         JSONSchema.Builder builder = JSONSchema.object();
         
-        List<String> requiredFields = new ArrayList<>();
-        
+        List<String> requiredFields = new ArrayList<>();  
         Method[] methods = pojoClass.getMethods();
         
         for (Method method : methods) {
@@ -156,9 +152,7 @@ public final class SchemaGenerator {
             String fieldName = getFieldNameFromGetter(method);
             Class<?> fieldType = method.getReturnType();
             Type genericType = method.getGenericReturnType();
-            
             String description = getDescriptionFromMethod(method);
-            
             boolean optional = isOptionalMethod(method);
             
             JSONSchema.PropertySchema property = createProperty(
@@ -206,6 +200,9 @@ public final class SchemaGenerator {
         }
         if (type.isEnum()) {
             return createEnumProperty(type, description);
+        }
+        if (Collection.class.isAssignableFrom(type)) {
+            return createCollectionProperty(genericType, description);
         }
         
         throw new UnsupportedOperationException(
@@ -283,6 +280,35 @@ public final class SchemaGenerator {
         return JSONSchema.PropertySchema.enumOf(description, values).build();
     }
     /**
+     * create collection property (List, Set).
+     */
+    private static JSONSchema.PropertySchema createCollectionProperty(
+            Type genericType,
+            String description
+    ) {
+        Class<?> elementType = extractGenericType(genericType, 0);
+        
+        if (elementType == null) {
+            throw new IllegalArgumentException(
+                "Collection must have generic type parameter. " +
+                "Use List<String>, not raw List"
+            );
+        }
+        JSONSchema.PropertySchema itemSchema =
+            createProperty(
+                elementType,
+                extractNestedGenericType(genericType),
+                description + " item",
+                null
+            );
+
+        return JSONSchema.PropertySchema
+            .array(itemSchema)
+            .description(description)
+            .build();
+    }
+    
+    /**
      * Check if type is numeric.
      */
     private static boolean isNumericType(Class<?> type) {
@@ -337,6 +363,51 @@ public final class SchemaGenerator {
         // first character lowercase
         return Character.toLowerCase(name.charAt(0)) + name.substring(1);
     }
+    /**
+     * extract generic type parameter from parameterized type.
+     * 
+     * @param index Type parameter index (0 for first, 1 for second, etc.)
+     */
+    private static Class<?> extractGenericType(Type type, int index) {
+        if (!(type instanceof ParameterizedType)) {
+            return null;
+        }
+        ParameterizedType paramType = (ParameterizedType) type;
+        Type[] typeArgs = paramType.getActualTypeArguments();
+        
+        if (index >= typeArgs.length) {
+            return null;
+        }
+        
+        Type argType = typeArgs[index];
+        
+        if (argType instanceof Class) {
+            return (Class<?>) argType;
+        }
+        return null;
+    }
+    /**
+     * extract nested generic type for recursive schema generation.
+     *
+     * E:
+     *   List<String>        -> String.class
+     *   List<List<String>>  -> List<String>
+     */
+    private static Type extractNestedGenericType(Type type) {
+        if (!(type instanceof ParameterizedType)) {
+            return null;
+        }
+
+        ParameterizedType paramType = (ParameterizedType) type;
+        Type[] args = paramType.getActualTypeArguments();
+
+        if (args.length == 0) {
+            return null;
+        }
+
+        return args[0];
+    }
+
     /**
      * Get description from RecordComponent.
      */

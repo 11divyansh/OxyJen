@@ -236,10 +236,26 @@ public final class JSONSchema {
                 .enumValues(Arrays.asList(values));
         }
         
-        public static Builder array(String description) {
+        public static Builder array(String description) { // may deprecate(only for prototype)
             return new Builder()
                 .type(SchemaType.ARRAY)
                 .description(description);
+        }
+        public static Builder array(PropertySchema items) {
+            return new Builder()
+                .type(SchemaType.ARRAY)
+                .items(items);
+        }
+        public static Builder array(String description, PropertySchema items) {
+            return new Builder()
+                .type(SchemaType.ARRAY)
+                .description(description)
+                .items(items);
+        }
+        public static Builder array(PropertySchema.Builder itemsBuilder) { // build PropertySchema without .build()
+            return new Builder()
+                .type(SchemaType.ARRAY)
+                .items(itemsBuilder.build());
         }
         
         public static PropertySchema object(String description, JSONSchema nestedSchema) {
