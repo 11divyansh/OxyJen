@@ -14,6 +14,8 @@ import java.util.Set;
 
 import io.oxyjen.llm.schema.annotations.Description;
 import io.oxyjen.llm.schema.annotations.JsonIgnore;
+import io.oxyjen.llm.schema.annotations.Max;
+import io.oxyjen.llm.schema.annotations.Min;
 import io.oxyjen.llm.schema.annotations.Pattern;
 import io.oxyjen.llm.schema.annotations.Size;
 
@@ -192,9 +194,11 @@ public final class SchemaGenerator {
             String description,
             AnnotatedElement element
     ) {
-        // Primitives and boxed types
         if (type == String.class) {
             return createStringProperty(description, element);
+        }
+        if (isNumericType(type)) {
+        	return createNumberProperty(description, element);
         }
         
         throw new UnsupportedOperationException(
@@ -226,6 +230,39 @@ public final class SchemaGenerator {
         }
         
         return builder.build();
+    }
+    /**
+     * create number property with validation.
+     */
+    private static JSONSchema.PropertySchema createNumberProperty(
+            String description,
+            AnnotatedElement element
+    ) {
+        JSONSchema.PropertySchema.Builder builder = 
+            JSONSchema.PropertySchema.number(description);
+        
+        if (element != null && element.isAnnotationPresent(Min.class)) {
+            Min min = element.getAnnotation(Min.class);
+            builder.minimum(min.value());
+        }
+        
+        if (element != null && element.isAnnotationPresent(Max.class)) {
+            Max max = element.getAnnotation(Max.class);
+            builder.maximum(max.value());
+        }
+        
+        return builder.build();
+    }
+    /**
+     * Check if type is numeric.
+     */
+    private static boolean isNumericType(Class<?> type) {
+        return type == int.class || type == Integer.class ||
+               type == long.class || type == Long.class ||
+               type == double.class || type == Double.class ||
+               type == float.class || type == Float.class ||
+               type == short.class || type == Short.class ||
+               type == byte.class || type == Byte.class;
     }
     /**
      * Check if method is a getter.
