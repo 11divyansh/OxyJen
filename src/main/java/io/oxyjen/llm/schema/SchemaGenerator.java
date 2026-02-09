@@ -204,6 +204,9 @@ public final class SchemaGenerator {
         if (Collection.class.isAssignableFrom(type)) {
             return createCollectionProperty(genericType, description);
         }
+        if (type.isArray()) {
+        	return createArrayProperty(type, description);
+        }
         
         throw new UnsupportedOperationException(
             "Unsupported type: " + type.getSimpleName() + 
@@ -306,6 +309,28 @@ public final class SchemaGenerator {
             .array(itemSchema)
             .description(description)
             .build();
+    }
+    /**
+     * create array property
+     */
+    private static JSONSchema.PropertySchema createArrayProperty(
+            Class<?> arrayType,
+            String description
+    ) {
+        Class<?> componentType = arrayType.getComponentType();
+        
+        JSONSchema.PropertySchema itemSchema =
+                createProperty(
+                    componentType,
+                    componentType,
+                    description + " item",
+                    null
+                );
+
+            return JSONSchema.PropertySchema
+                .array(itemSchema)
+                .description(description)
+                .build();
     }
     
     /**
