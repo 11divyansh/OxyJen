@@ -286,15 +286,12 @@ First-class support for LLM providers:
 
 
 
-### **Phase 3: Advanced Orchestration (v0.3 - 4-6 Weeks)**
-- **Async execution** - Run nodes in parallel
-- **DAG support** - Complex branching workflows
-- **Conditional routing** - "If X, then run node Y"
-- **Retry logic** - Automatic retries with backoff
-- **Circuit breakers** - Fail fast when services are down
-- **Streaming responses**
-- **Token counting & cost tracking**
+### **Phase 3: Advanced Orchestration (v0.3 - Done)**
+Bringing Prompt intelligence and schema enforcement to Oxyjen, eliminating regex hell, and delivering structured LLM output
+- **JSON schema enforcement**
 - **Prompt templates**
+- **Timeout enforcement**
+- **Retry cap + Jitter**
 
 
 
@@ -303,6 +300,13 @@ First-class support for LLM providers:
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
 - **Multi-tenancy** - Isolate data between users/orgs
+- **Async execution** - Run nodes in parallel
+- **DAG support** - Complex branching workflows
+- **Conditional routing** - "If X, then run node Y"
+- **Retry logic** - Automatic retries with backoff
+- **Circuit breakers** - Fail fast when services are down
+- **Streaming responses**
+- **Token counting & cost tracking**
 
 ---
 
