@@ -124,6 +124,8 @@ public final class JSONSchema {
         private final Long minimum;             // min number value
         private final Long maximum;             // Max number value
         private final PropertySchema items;		// for arrays
+        private final PropertySchema additionalProperties;
+
 
         
         public static class Builder {
@@ -137,6 +139,7 @@ public final class JSONSchema {
             private Long minimum;
             private Long maximum;
             private PropertySchema items;
+            private PropertySchema additionalProperties;
             
             public Builder type(SchemaType type) {
                 this.type = type;
@@ -188,6 +191,11 @@ public final class JSONSchema {
                 return this;
             }
             
+            public Builder additionalProperties(PropertySchema schema) {
+                this.additionalProperties = schema;
+                return this;
+            }
+            
             public PropertySchema build() {
             	if (type == null) {
                     throw new IllegalStateException("Schema type is required");
@@ -206,6 +214,14 @@ public final class JSONSchema {
 
                 if (type != SchemaType.ARRAY && items != null) {
                     throw new IllegalStateException("Only array schemas can define items");
+                }
+                
+                if (type == SchemaType.OBJECT &&
+                	    nestedSchema == null &&
+                	    additionalProperties == null) {
+                	    throw new IllegalStateException(
+                	        "Object schema must have properties or additionalProperties"
+                	    );
                 }
                 return new PropertySchema(this);
             }
@@ -279,6 +295,7 @@ public final class JSONSchema {
             this.minimum = b.minimum;
             this.maximum = b.maximum;
             this.items = b.items;
+            this.additionalProperties = b.additionalProperties;
         }
         
         public SchemaType type() {
@@ -328,6 +345,11 @@ public final class JSONSchema {
             
             if (type == SchemaType.ARRAY && items != null) {
                 sb.append(",\"items\":").append(items.toJSON());
+            }
+            
+            if (additionalProperties != null) {
+                sb.append(",\"additionalProperties\":")
+                  .append(additionalProperties.toJSON());
             }
             
             if (nestedSchema != null) {
