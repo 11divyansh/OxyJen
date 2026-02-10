@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -207,6 +208,9 @@ public final class SchemaGenerator {
         if (type.isArray()) {
         	return createArrayProperty(type, description);
         }
+        if (isComplexType(type)) {
+            return createNestedObjectProperty(type, description);
+        }
         
         throw new UnsupportedOperationException(
             "Unsupported type: " + type.getSimpleName() + 
@@ -332,7 +336,19 @@ public final class SchemaGenerator {
                 .description(description)
                 .build();
     }
-    
+    /**
+     * create nested object property
+     */
+    private static JSONSchema.PropertySchema createNestedObjectProperty(
+            Class<?> objectType,
+            String description
+    ) {
+        JSONSchema nestedSchema = generateSchema(objectType);
+
+        return JSONSchema.PropertySchema
+            .object(description, nestedSchema);
+    }
+
     /**
      * Check if type is numeric.
      */
@@ -343,6 +359,16 @@ public final class SchemaGenerator {
                type == float.class || type == Float.class ||
                type == short.class || type == Short.class ||
                type == byte.class || type == Byte.class;
+    }
+    private static boolean isComplexType(Class<?> type) {
+        return !type.isPrimitive() &&
+               !type.isEnum() &&
+               !type.isArray() &&
+               type != String.class &&
+               !Number.class.isAssignableFrom(type) &&
+               !Boolean.class.isAssignableFrom(type) &&
+               !Collection.class.isAssignableFrom(type) &&
+               !Map.class.isAssignableFrom(type);
     }
     /**
      * Check if method is a getter.

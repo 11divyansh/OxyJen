@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /**
  * Minimal sequential Graph: stores nodes in a list and exposes them in insertion order.
- * Good for v0.1 when you only need simple pipelines.
+ * when you only need simple pipelines.
  */
 public class Graph {
 

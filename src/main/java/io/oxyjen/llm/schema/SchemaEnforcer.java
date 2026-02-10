@@ -42,18 +42,16 @@ public final class SchemaEnforcer {
         String lastResponse = null;
               
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            // Call LLM
             String response = model.chat(enhancedPrompt);
             lastResponse = response;
             
             // Extract JSON (removing markdown fences (if present))
             String json = extractJSON(response);
             
-            // Validate
             SchemaValidator.ValidationResult result = validator.validate(json);
             
             if (result.isValid()) {
-                return json; // Success!
+                return json;
             }
             
             enhancedPrompt = buildRetryPrompt(prompt, json, result,attempt);
