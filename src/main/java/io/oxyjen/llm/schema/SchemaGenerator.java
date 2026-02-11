@@ -208,6 +208,9 @@ public final class SchemaGenerator {
         if (type.isArray()) {
         	return createArrayProperty(type, description);
         }
+        if (Map.class.isAssignableFrom(type)) {
+            return createMapProperty(genericType, description);
+        }
         if (isComplexType(type)) {
             return createNestedObjectProperty(type, description);
         }
@@ -336,6 +339,47 @@ public final class SchemaGenerator {
                 .description(description)
                 .build();
     }
+    /**
+     * Create map property.
+     *
+     * v0.4: JSON object with additionalProperties
+     */
+    private static JSONSchema.PropertySchema createMapProperty(
+            Type genericType,
+            String description
+    ) {
+        Class<?> keyType = extractGenericType(genericType, 0);
+        Class<?> valueType = extractGenericType(genericType, 1);
+        Type valueGenericType = extractNestedGenericType(genericType);
+
+        if (keyType == null || valueType == null) {
+            throw new IllegalArgumentException(
+                "Map must have generic type parameters. " +
+                "Use Map<String, Integer>, not raw Map"
+            );
+        }
+
+        if (keyType != String.class) {
+            throw new IllegalArgumentException(
+                "Only Map<String, V> is supported in JSON schemas"
+            );
+        }
+
+        JSONSchema.PropertySchema valueSchema =
+            createProperty(
+                valueType,
+                valueGenericType,
+                description + " value",
+                null
+            );
+
+        return new JSONSchema.PropertySchema.Builder()
+            .type(SchemaType.OBJECT)
+            .description(description)
+            .additionalProperties(valueSchema)
+            .build();
+    }
+
     /**
      * create nested object property
      */
