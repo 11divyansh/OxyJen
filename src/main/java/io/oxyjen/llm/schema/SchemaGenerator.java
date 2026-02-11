@@ -340,9 +340,7 @@ public final class SchemaGenerator {
                 .build();
     }
     /**
-     * Create map property.
-     *
-     * v0.4: JSON object with additionalProperties
+     * Create map property
      */
     private static JSONSchema.PropertySchema createMapProperty(
             Type genericType,
