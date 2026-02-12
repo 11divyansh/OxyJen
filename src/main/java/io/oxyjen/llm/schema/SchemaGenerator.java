@@ -77,7 +77,6 @@ public final class SchemaGenerator {
         
         VISITED.get().add(clazz);
         
-        // Route to appropriate handler
         if (clazz.isRecord()) {
         	return fromRecord(clazz);
         } else {
@@ -105,7 +104,6 @@ public final class SchemaGenerator {
             boolean optional = isOptional(component);
             Type genericType = component.getGenericType();
             
-            // Create property schema
             JSONSchema.PropertySchema property = createProperty(
                 fieldType, 
                 genericType, 
@@ -141,7 +139,6 @@ public final class SchemaGenerator {
         Method[] methods = pojoClass.getMethods();
         
         for (Method method : methods) {
-            // skip non-getters
             if (!isGetter(method)) {
                 continue;
             }
@@ -190,6 +187,22 @@ public final class SchemaGenerator {
             String description,
             AnnotatedElement element
     ) {
+    	if (type == Optional.class) {
+    	    Class<?> wrappedType = extractGenericType(genericType, 0);
+    	    Type wrappedGenericType = extractNestedGenericType(genericType);
+    	    if (wrappedType == null) {
+    	        throw new IllegalArgumentException(
+    	            "Optional must have generic type parameter"
+    	        );
+    	    }
+
+    	    return createProperty(
+    	        wrappedType,
+    	        wrappedGenericType,
+    	        description,
+    	        element
+    	    );
+    	}
         if (type == String.class) {
             return createStringProperty(description, element);
         }
@@ -220,9 +233,7 @@ public final class SchemaGenerator {
             ". Supported: primitives, String, enums, Collections, Arrays, Maps, POJOs, Records"
         );
     }
-    /**
-     * Create string property with validation.
-     */
+  
     private static JSONSchema.PropertySchema createStringProperty(
             String description,
             AnnotatedElement element
@@ -243,9 +254,7 @@ public final class SchemaGenerator {
         
         return builder.build();
     }
-    /**
-     * create number property with validation.
-     */
+    
     private static JSONSchema.PropertySchema createNumberProperty(
             String description,
             AnnotatedElement element
@@ -265,19 +274,14 @@ public final class SchemaGenerator {
         
         return builder.build();
     }
-    /**
-     * create boolean property.
-     */
+    
     private static JSONSchema.PropertySchema createBooleanProperty(
             String description,
             AnnotatedElement element
     ) {
         return JSONSchema.PropertySchema.bool(description).build();
     }
-    
-    /**
-     * create enum property.
-     */
+      
     private static JSONSchema.PropertySchema createEnumProperty(
             Class<?> enumType,
             String description
@@ -289,9 +293,7 @@ public final class SchemaGenerator {
         
         return JSONSchema.PropertySchema.enumOf(description, values).build();
     }
-    /**
-     * create collection property (List, Set).
-     */
+   
     private static JSONSchema.PropertySchema createCollectionProperty(
             Type genericType,
             String description
@@ -317,9 +319,7 @@ public final class SchemaGenerator {
             .description(description)
             .build();
     }
-    /**
-     * create array property
-     */
+    
     private static JSONSchema.PropertySchema createArrayProperty(
             Class<?> arrayType,
             String description
@@ -339,9 +339,7 @@ public final class SchemaGenerator {
                 .description(description)
                 .build();
     }
-    /**
-     * Create map property
-     */
+   
     private static JSONSchema.PropertySchema createMapProperty(
             Type genericType,
             String description
@@ -378,9 +376,6 @@ public final class SchemaGenerator {
             .build();
     }
 
-    /**
-     * create nested object property
-     */
     private static JSONSchema.PropertySchema createNestedObjectProperty(
             Class<?> objectType,
             String description
@@ -391,9 +386,6 @@ public final class SchemaGenerator {
             .object(description, nestedSchema);
     }
 
-    /**
-     * Check if type is numeric.
-     */
     private static boolean isNumericType(Class<?> type) {
         return type == int.class || type == Integer.class ||
                type == long.class || type == Long.class ||
@@ -412,11 +404,8 @@ public final class SchemaGenerator {
                !Collection.class.isAssignableFrom(type) &&
                !Map.class.isAssignableFrom(type);
     }
-    /**
-     * Check if method is a getter.
-     */
+    
     private static boolean isGetter(Method method) {
-        // must start with "get" or "is"
         String name = method.getName();
         if (!name.startsWith("get") && !name.startsWith("is")) {
             return false;
@@ -451,8 +440,16 @@ public final class SchemaGenerator {
             name = name.substring(2);
         } else if (name.startsWith("get")) {
             name = name.substring(3);
+        } else {
+            throw new IllegalArgumentException(
+                  "Invalid getter method: " + method.getName()
+            );
         }
-        
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Getter does not follow JavaBean convention: " + method.getName()
+            );
+        }
         // first character lowercase
         return Character.toLowerCase(name.charAt(0)) + name.substring(1);
     }
@@ -517,7 +514,6 @@ public final class SchemaGenerator {
             return annotation.value();
         }
         
-        // try to get from field
         try {
             String fieldName = getFieldNameFromGetter(method);
             Field field = method.getDeclaringClass().getDeclaredField(fieldName);
@@ -543,7 +539,6 @@ public final class SchemaGenerator {
             }
         }
         
-        // Check if type is Optional
         return component.getType() == Optional.class;
     }
     /**
@@ -573,12 +568,9 @@ public final class SchemaGenerator {
             // field not found
         }
         
-        // check if return type is Optional
         return method.getReturnType() == Optional.class;
     }
-    /**
-     * Get class-level description.
-     */
+ 
     private static String getClassDescription(Class<?> clazz) {
         Description annotation = clazz.getAnnotation(Description.class);
         return annotation != null ? annotation.value() : null;
