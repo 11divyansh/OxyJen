@@ -407,6 +407,9 @@ public final class SchemaGenerator {
     
     private static boolean isGetter(Method method) {
         String name = method.getName();
+        if(name.equals("getClass")) {
+        	return false;
+        }
         if (!name.startsWith("get") && !name.startsWith("is")) {
             return false;
         }

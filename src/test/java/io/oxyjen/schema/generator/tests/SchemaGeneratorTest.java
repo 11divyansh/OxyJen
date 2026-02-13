@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import io.oxyjen.llm.schema.JSONSchema;
 import io.oxyjen.llm.schema.SchemaGenerator;
 import io.oxyjen.llm.schema.annotations.Description;
+import io.oxyjen.llm.schema.annotations.JsonIgnore;
 
 public class SchemaGeneratorTest {
 	
@@ -148,6 +149,29 @@ public class SchemaGeneratorTest {
 		assertTrue(json.contains("\"address\""));
 	    assertTrue(json.contains("\"type\":\"object\""));
 	    assertTrue(json.contains("\"city\""));
+	}
+	@Test
+	void pojoWithGettersGeneratesShemaTest() {
+		log("Pojo with getter generates schema");
+		 class User {
+		        public String getName() { return "x"; }
+		        public int getAge() { return 1; }
+		 }
+		 JSONSchema schema = SchemaGenerator.fromClass(User.class);
+		 String json = schema.toJSON();
+		 print("json",json);
+		 assertTrue(json.contains("\"name\""));
+		 assertTrue(json.contains("\"age\""));
+	}
+	@Test
+	void jsonIgnoreOnRecordField() {
+		log("@JsonIgnore on field test");
+	    record Test(String name, @JsonIgnore String secret) {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"name\""));
+	    assertFalse(json.contains("secret"));
 	}
 
 
