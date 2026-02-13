@@ -228,5 +228,31 @@ public class SchemaGeneratorTest {
 	        () -> SchemaGenerator.fromClass(Node.class)
 	    );
 	}
+	@Test
+	void rawListThrows() {
+	    record Test(List raw) {}
+	    assertThrows(
+	        IllegalArgumentException.class,
+	        () -> SchemaGenerator.fromClass(Test.class)
+	    );
+	}
+	@Test
+	void rawMapThrows() {
+	    record Test(Map raw) {}
+	    assertThrows(
+	        IllegalArgumentException.class,
+	        () -> SchemaGenerator.fromClass(Test.class)
+	    );
+	}
+	@Test
+	void emptyPojoGeneratesEmptyObjectSchema() {
+		log("Empty pojo generates empty object schema");
+	    class Empty {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Empty.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"type\":\"object\""));
+	}
+
 	
 }
