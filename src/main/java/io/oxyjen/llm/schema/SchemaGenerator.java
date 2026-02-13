@@ -474,6 +474,9 @@ public final class SchemaGenerator {
         if (argType instanceof Class) {
             return (Class<?>) argType;
         }
+        if (argType instanceof ParameterizedType) {
+        	return (Class<?>) ((ParameterizedType) argType).getRawType();
+        }
         return null;
     }
     /**
