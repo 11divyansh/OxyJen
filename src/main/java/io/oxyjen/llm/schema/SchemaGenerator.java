@@ -189,7 +189,7 @@ public final class SchemaGenerator {
     ) {
     	if (type == Optional.class) {
     	    Class<?> wrappedType = extractGenericType(genericType, 0);
-    	    Type wrappedGenericType = extractNestedGenericType(genericType);
+    	    Type wrappedGenericType = extractNestedGenericType(genericType, 0);
     	    if (wrappedType == null) {
     	        throw new IllegalArgumentException(
     	            "Optional must have generic type parameter"
@@ -309,7 +309,7 @@ public final class SchemaGenerator {
         JSONSchema.PropertySchema itemSchema =
             createProperty(
                 elementType,
-                extractNestedGenericType(genericType),
+                extractNestedGenericType(genericType, 0),
                 description + " item",
                 null
             );
@@ -346,7 +346,7 @@ public final class SchemaGenerator {
     ) {
         Class<?> keyType = extractGenericType(genericType, 0);
         Class<?> valueType = extractGenericType(genericType, 1);
-        Type valueGenericType = extractNestedGenericType(genericType);
+        Type valueGenericType = extractNestedGenericType(genericType, 1);
 
         if (keyType == null || valueType == null) {
             throw new IllegalArgumentException(
@@ -486,7 +486,7 @@ public final class SchemaGenerator {
      *   List<String>        -> String.class
      *   List<List<String>>  -> List<String>
      */
-    private static Type extractNestedGenericType(Type type) {
+    private static Type extractNestedGenericType(Type type, int index) {
         if (!(type instanceof ParameterizedType)) {
             return null;
         }
@@ -494,11 +494,11 @@ public final class SchemaGenerator {
         ParameterizedType paramType = (ParameterizedType) type;
         Type[] args = paramType.getActualTypeArguments();
 
-        if (args.length == 0) {
+        if (index >= args.length) {
             return null;
         }
 
-        return args[0];
+        return args[index];
     }
 
     /**

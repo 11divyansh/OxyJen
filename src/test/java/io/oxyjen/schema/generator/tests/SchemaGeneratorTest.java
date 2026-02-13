@@ -1,6 +1,7 @@
 package io.oxyjen.schema.generator.tests;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -117,6 +118,24 @@ public class SchemaGeneratorTest {
 	    print("json",json);
 	    assertTrue(json.contains("\"additionalProperties\""));
 	    assertTrue(json.contains("\"type\":\"number\""));
+	}
+	@Test
+	void nestedMapGeneratesNestedSchemas() {
+		log("Nested map generates nested schema");
+	    record Test(Map<String, List<String>> data) {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"additionalProperties\""));
+	    assertTrue(json.contains("\"type\":\"array\""));
+	}
+	@Test
+	void mapWithNonStringKeyThrows() {
+	    record Test(Map<Integer, String> invalid) {}
+	    assertThrows(
+	        IllegalArgumentException.class,
+	        () -> SchemaGenerator.fromClass(Test.class)
+	    );
 	}
 
 
