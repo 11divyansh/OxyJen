@@ -220,5 +220,13 @@ public class SchemaGeneratorTest {
 		assertTrue(json.contains("\"minimum\":1"));
 	    assertTrue(json.contains("\"maximum\":10"));
 	}
+	@Test
+	void circularReferenceThrows() {
+	    record Node(Node parent) {}
+	    assertThrows(
+	        IllegalArgumentException.class,
+	        () -> SchemaGenerator.fromClass(Node.class)
+	    );
+	}
 	
 }
