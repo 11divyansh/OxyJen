@@ -137,6 +137,18 @@ public class SchemaGeneratorTest {
 	        () -> SchemaGenerator.fromClass(Test.class)
 	    );
 	}
+	@Test
+	void nestedRecordGeneratesNestedObjectSchemaTest() {
+		log("Nested record generates nested object schema");
+		record Address(String city) {}
+		record User(String name, Address address) {}
+		JSONSchema schema = SchemaGenerator.fromClass(User.class);
+		String json = schema.toJSON();
+		print("json",json);
+		assertTrue(json.contains("\"address\""));
+	    assertTrue(json.contains("\"type\":\"object\""));
+	    assertTrue(json.contains("\"city\""));
+	}
 
 
 }
