@@ -173,6 +173,20 @@ public class SchemaGeneratorTest {
 	    assertTrue(json.contains("\"name\""));
 	    assertFalse(json.contains("secret"));
 	}
+	@Test
+	void jsonIgnoreOnPojoGetter() {
+		log("@JsonIgnore on pojo getter");
+	    class User {
+	        public String getName() { return "x"; }
 
+	        @JsonIgnore
+	        public String getSecret() { return "secret"; }
+	    }
+	    JSONSchema schema = SchemaGenerator.fromClass(User.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"name\""));
+	    assertFalse(json.contains("secret"));
+	}
 
 }
