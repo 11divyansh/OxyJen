@@ -178,7 +178,6 @@ public class SchemaGeneratorTest {
 		log("@JsonIgnore on pojo getter");
 	    class User {
 	        public String getName() { return "x"; }
-
 	        @JsonIgnore
 	        public String getSecret() { return "secret"; }
 	    }
