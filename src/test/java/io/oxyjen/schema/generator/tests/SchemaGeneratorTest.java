@@ -14,6 +14,10 @@ import io.oxyjen.llm.schema.JSONSchema;
 import io.oxyjen.llm.schema.SchemaGenerator;
 import io.oxyjen.llm.schema.annotations.Description;
 import io.oxyjen.llm.schema.annotations.JsonIgnore;
+import io.oxyjen.llm.schema.annotations.Max;
+import io.oxyjen.llm.schema.annotations.Min;
+import io.oxyjen.llm.schema.annotations.Pattern;
+import io.oxyjen.llm.schema.annotations.Size;
 
 public class SchemaGeneratorTest {
 	
@@ -187,5 +191,34 @@ public class SchemaGeneratorTest {
 	    assertTrue(json.contains("\"name\""));
 	    assertFalse(json.contains("secret"));
 	}
-
+	@Test
+	void sizeAnnotationAppliedToString() {
+		log("Size annotation test");
+	    record Test(@Size(min=2, max=5) String name) {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"minLength\":2"));
+	    assertTrue(json.contains("\"maxLength\":5"));
+	}
+	@Test
+	void patternAnnotationApplied() {
+		log("Pattern annotation test");
+	    record Test(@Pattern("\\d+") String code) {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"pattern\""));
+	}
+	@Test
+	void minMaxAppliedToNumberTest() {
+		log("MIN/MAX applied to number test");
+		record Test(@Min(1) @Max(10) int count) {}
+		JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+		String json = schema.toJSON();
+		print("json",json);
+		assertTrue(json.contains("\"minimum\":1"));
+	    assertTrue(json.contains("\"maximum\":10"));
+	}
+	
 }
