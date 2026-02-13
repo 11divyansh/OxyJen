@@ -200,29 +200,27 @@ public final class JSONSchema {
             	if (type == null) {
                     throw new IllegalStateException("Schema type is required");
                 }
-                if (type == SchemaType.OBJECT && nestedSchema == null) {
-                    throw new IllegalStateException(
-                        "Object schema must have nestedSchema"
-                    );
-                }
-                if (type == SchemaType.OBJECT && nestedSchema.properties().isEmpty()) {
-                    throw new IllegalStateException("Object schema must have properties");
-                }
+            	if (type == SchemaType.OBJECT) {
+            	    boolean hasFixedProperties =
+            	        nestedSchema != null &&
+            	        !nestedSchema.properties().isEmpty();
+
+            	    boolean hasDynamicProperties =
+            	        additionalProperties != null;
+
+            	    if (!hasFixedProperties && !hasDynamicProperties) {
+            	        throw new IllegalStateException(
+            	            "Object schema must have properties or additionalProperties"
+            	        );
+            	    }
+            	}
                 if (type == SchemaType.ARRAY && items == null) {
                     throw new IllegalStateException("Array schema must define items");
                 }
 
                 if (type != SchemaType.ARRAY && items != null) {
                     throw new IllegalStateException("Only array schemas can define items");
-                }
-                
-                if (type == SchemaType.OBJECT &&
-                	    nestedSchema == null &&
-                	    additionalProperties == null) {
-                	    throw new IllegalStateException(
-                	        "Object schema must have properties or additionalProperties"
-                	    );
-                }
+                }  
                 return new PropertySchema(this);
             }
         }
@@ -272,8 +270,7 @@ public final class JSONSchema {
             return new Builder()
                 .type(SchemaType.ARRAY)
                 .items(itemsBuilder.build());
-        }
-        
+        }       
         public static PropertySchema object(String description, JSONSchema nestedSchema) {
             return new Builder()
                 .type(SchemaType.OBJECT)

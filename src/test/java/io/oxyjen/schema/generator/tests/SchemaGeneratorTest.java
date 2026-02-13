@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,27 @@ public class SchemaGeneratorTest {
 	    print("json",json);
 	    assertTrue(json.contains("\"type\":\"array\""));
 	    assertTrue(json.contains("\"items\":{\"type\":\"array\""));
+	}
+	@Test
+	void primitiveArrayGeneratesArraySchema() {
+		log("Primitive array generates array schema");
+	    record Test(int[] scores) {}
+
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"type\":\"array\""));
+	    assertTrue(json.contains("\"type\":\"number\""));
+	}
+	@Test
+	void mapGeneratesAdditionalProperties() {
+		log("Map generates additional properties");
+	    record Test(Map<String, Integer> prices) {}
+	    JSONSchema schema = SchemaGenerator.fromClass(Test.class);
+	    String json = schema.toJSON();
+	    print("json",json);
+	    assertTrue(json.contains("\"additionalProperties\""));
+	    assertTrue(json.contains("\"type\":\"number\""));
 	}
 
 
