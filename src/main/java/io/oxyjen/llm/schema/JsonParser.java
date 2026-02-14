@@ -72,6 +72,35 @@ public final class JsonParser {
             }
         }
     }
+    private Map<String, Object> parseObject() {
+    	Map<String, Object> map = new LinkedHashMap<>();
+    	
+    	consume('{');
+    	skipWhitespace();
+    	if(peek() == '}') {
+    		consume('}');
+    		return map;
+    	}
+    	
+    	while (true) {
+    		skipWhitespace();
+    		
+    		String key = parseString();
+    		skipWhitespace();
+    		consume(':');
+    		skipWhitespace();
+    		Object value = parseValue();
+    		
+    		map.put(key, value);
+    		skipWhitespace();
+    		if(peek() == '}') {
+    			consume('}');
+    			break;
+    		}
+    		consume(',');
+    	}
+    	return map;	
+    }
     private String parseString() {
         consume('"');
         
