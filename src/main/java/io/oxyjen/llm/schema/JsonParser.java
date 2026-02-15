@@ -57,8 +57,11 @@ public final class JsonParser {
         }
         char c = json.charAt(pos);
         return switch (c) {
+        	case '{' -> parseObject();
             case '"' -> parseString();
-            default -> parseObject();
+            case 't', 'f' -> parseBoolean();
+            case 'n' -> parseNull();
+            default -> parseNumber();
         };
     }
    
@@ -144,6 +147,71 @@ public final class JsonParser {
         }
         throw new IllegalArgumentException("Unterminated string");
     }
+    private Number parseNumber() {
+    	int start = pos;
+    	if(peek() == '-') {
+    		pos++;
+    	}
+    	
+    	if (!Character.isDigit(peek())) {
+    		throw new IllegalArgumentException(
+    				"Expected digit, got: " + peek());
+    	}
+    	
+    	while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    		pos++;
+    	}
+    	boolean isDecimal = false;
+    	if (pos < json.length() && json.charAt(pos) == '.') {
+    		isDecimal = true;
+    		pos++;
+    		if (pos >= json.length() || !Character.isDigit(json.charAt(pos))) {
+    			throw new IllegalArgumentException("Expected digit after decimal point");
+    		}
+    		while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    			pos++;
+    		}
+    	}
+    	if (pos < json.length() && (json.charAt(pos) == 'e' || json.charAt(pos) == 'E')) {
+    		isDecimal = true;
+    		pos++;
+    		if (pos < json.length() && (json.charAt(pos) == '+' || json.charAt(pos) == '-')) {
+    			pos++;
+    		}
+    		if( pos >= json.length() || !Character.isDigit(json.charAt(pos))) {
+    			throw new IllegalArgumentException("Expected digit in exponent");
+    		}
+    		while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    			pos++;
+    		}
+    	}
+    	
+    	String numberStr = json.substring(start, pos);
+    	if (isDecimal) {
+    		return Double.parseDouble(numberStr);
+    	} else {
+    		return Long.parseLong(numberStr);
+    	}
+    }
+    
+   private Boolean parseBoolean() {
+	   if (json.startsWith("true", pos)) {
+		   pos += 4;
+		   return true;
+	   }
+	   if (json.startsWith("false", pos)) {
+		   pos += 5;
+		   return false;
+	   }
+	   throw new IllegalArgumentException("Expected 'true' or 'false'");
+   }
+   private Object parseNull() {
+	   if (json.startsWith("null", pos)) {
+		   pos += 4;
+		   return null;
+	   }
+	   throw new IllegalArgumentException("Expected 'null'");
+   }
     // peek at current char without consuming
     private char peek() {
         if (pos >= json.length()) {
