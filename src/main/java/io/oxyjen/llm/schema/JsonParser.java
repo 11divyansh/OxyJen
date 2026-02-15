@@ -1,7 +1,12 @@
 package io.oxyjen.llm.schema;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+
+import java.math.BigInteger;
+import java.math.BigDecimal;
 
 /**
  * Lightweight JSON parser.
@@ -22,7 +27,7 @@ public final class JsonParser {
     private int pos = 0;
     
     private JsonParser(String json) {
-        this.json = json.trim();
+        this.json = json;
     }
     /**
      * Parse JSON string to Object tree
@@ -58,6 +63,7 @@ public final class JsonParser {
         char c = json.charAt(pos);
         return switch (c) {
         	case '{' -> parseObject();
+        	case '[' -> parseArray();
             case '"' -> parseString();
             case 't', 'f' -> parseBoolean();
             case 'n' -> parseNull();
@@ -103,6 +109,30 @@ public final class JsonParser {
     		consume(',');
     	}
     	return map;	
+    }
+    private List<Object> parseArray() {
+    	List<Object> list = new ArrayList<>();
+    	
+    	consume('[');
+    	skipWhitespace();
+    	if (peek() == ']') {
+    		consume(']');
+    		return list;
+    	}
+    	
+    	while (true) {
+    		skipWhitespace();
+    		Object value = parseValue();
+    		list.add(value);
+    		
+    		skipWhitespace();
+    		if (peek() == ']') {
+    			consume(']');
+    			break;
+    		}
+    		consume(',');
+    	}
+    	return list;
     }
     private String parseString() {
         consume('"');
@@ -152,21 +182,27 @@ public final class JsonParser {
     	if(peek() == '-') {
     		pos++;
     	}
-    	
-    	if (!Character.isDigit(peek())) {
-    		throw new IllegalArgumentException(
-    				"Expected digit, got: " + peek());
-    	}
-    	
-    	while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    	if (peek() == '0') {
     		pos++;
+    		if (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    			throw new IllegalArgumentException(
+    					"Leading zeros are not allowed at position " + pos);
+    		}
+    	} else if (Character.isDigit(peek())) {
+    		while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
+    			pos++;
+    		}
+    	} else {
+    		throw new IllegalArgumentException(
+    				"Expected digit at position " + pos);
     	}
+    	
     	boolean isDecimal = false;
     	if (pos < json.length() && json.charAt(pos) == '.') {
     		isDecimal = true;
     		pos++;
     		if (pos >= json.length() || !Character.isDigit(json.charAt(pos))) {
-    			throw new IllegalArgumentException("Expected digit after decimal point");
+    			throw new IllegalArgumentException("Expected digit after decimal point at position" + pos);
     		}
     		while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
     			pos++;
@@ -187,20 +223,31 @@ public final class JsonParser {
     	}
     	
     	String numberStr = json.substring(start, pos);
-    	if (isDecimal) {
-    		return Double.parseDouble(numberStr);
-    	} else {
-    		return Long.parseLong(numberStr);
+    	try {
+    		if (isDecimal) {
+    			return new BigDecimal(numberStr);
+    		} else {
+    			try {
+    				return Long.parseLong(numberStr);
+    			} catch (NumberFormatException e) {
+    				return new BigInteger(numberStr);
+    			}
+    		}
+    	} catch (NumberFormatException e) {
+    		throw new IllegalArgumentException(
+    				"Invalid number format at position " + start, e);
     	}
     }
     
    private Boolean parseBoolean() {
 	   if (json.startsWith("true", pos)) {
 		   pos += 4;
+		   validateLiteralEnd();
 		   return true;
 	   }
 	   if (json.startsWith("false", pos)) {
 		   pos += 5;
+		   validateLiteralEnd();
 		   return false;
 	   }
 	   throw new IllegalArgumentException("Expected 'true' or 'false'");
@@ -208,10 +255,21 @@ public final class JsonParser {
    private Object parseNull() {
 	   if (json.startsWith("null", pos)) {
 		   pos += 4;
+		   validateLiteralEnd();
 		   return null;
 	   }
 	   throw new IllegalArgumentException("Expected 'null'");
    }
+   private void validateLiteralEnd() {
+	    if (pos < json.length()) {
+	        char c = json.charAt(pos);
+	        if (Character.isLetterOrDigit(c)) {
+	            throw new IllegalArgumentException(
+	                "Invalid literal continuation at position " + pos
+	            );
+	        }
+	    }
+	}
     // peek at current char without consuming
     private char peek() {
         if (pos >= json.length()) {
