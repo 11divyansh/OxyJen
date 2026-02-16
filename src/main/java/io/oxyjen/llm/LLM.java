@@ -3,12 +3,7 @@ import io.oxyjen.llm.transport.openai.OpenAIModels;
 /**
  * Public entry point for Oxyjen LLM system.
  * 
- * This is a facade + factory. Users never touch:
- * - OpenAIClient
- * - HTTP clients
- * - Provider details
- * 
- * They only touch LLM.
+ * This is a facade + factory.
  * 
  * Responsibilities (v0.2 only):
  * - Route model name → provider
@@ -16,16 +11,10 @@ import io.oxyjen.llm.transport.openai.OpenAIModels;
  * - Return a ChatModel
  * - Expose chain() and profile() entry points
  * 
- * It must NOT:
- * - Be smart
- * - Do config loading
- * - Do runtime routing
  */
 public final class LLM {
     
-    private LLM() {
-        // No instances - static factory only
-    }
+    private LLM() {}
     
     /**
      * Create a ChatModel for a given model name.
@@ -130,5 +119,5 @@ public final class LLM {
         return of("gpt-4o-mini");
     }
     
-    // TODO v0.3+: expose profile registration via LLM
+    // TODO v0.4+: expose profile registration via LLM
 }

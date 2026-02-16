@@ -24,7 +24,7 @@ public interface NodePlugin<I, O> {
      * @return A unique name or identifier for this node (for debugging, logs, etc.).
      */
     default String getName() {
-        return this.getClass().getSimpleName();   // or something similar
+        return this.getClass().getSimpleName();   
     }
 
     /**

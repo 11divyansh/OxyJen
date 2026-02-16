@@ -24,7 +24,7 @@ package io.oxyjen.core;
  * as a {@link RuntimeException} to stop execution.
  *
  * <p>This version supports only <b>sequential execution</b> (v0.1).
- * Future versions (v0.2+) will introduce async, DAG, and retry logic.
+ * Future versions will introduce async, DAG, and retry logic.
  */
 public class Executor {
 
@@ -41,36 +41,27 @@ public class Executor {
      */
 	@SuppressWarnings("unchecked")
     public <I, O> O run(Graph graph, I input, NodeContext context) {
-        // Ensure graph has at least one node before running.
+      
         graph.validate();
-        
-        //Set graph name inside context, it will help in logging
         context.setMetadata("graphName", graph.getName());
 
-        // The current result —> initially the input, updated after each node executes.
         Object current = input;
 
-        // Iterate through each node in insertion order.
         for (NodePlugin<?, ?> node : graph.getNodes()) {
             context.getLogger().info("Executing node: " + node.getName());
 
-            // Lifecycle hook —> can be used for setup or initialization.
             node.onStart(context);
 
             NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
             
             try {
-            	// Run the node and capture its output.
             	current = executeNode(safeNode, current, context);
-
-            	// Lifecycle hook —> cleanup or resource release.
             	node.onFinish(context);
 
             	context.getLogger().info("Completed node: " + node.getName());
             } catch(Exception e) {
             	context.getLogger().severe("Error in node [" +safeNode.getName() +"]: " + e.getMessage());
             	
-            	// Call context-level ExceptionHandler if present
             	if(context.getExceptionHandler() != null) {
             		try {
             			context.getExceptionHandler().handleException(safeNode, e, context);
@@ -84,15 +75,12 @@ public class Executor {
             		context.getLogger().warning("Context ExceptionHandler failed for node: " + safeNode.getName());
             	}
             	
-            	// Re-throw so propagation test passes
             	throw new RuntimeException(
             		    "Node failed: " + safeNode.getName(), e
             		);
          
             }
         }
-
-        // Return the final result (casted to generic type O).
         return (O) current;
     }
 
@@ -105,7 +93,6 @@ public class Executor {
      * @return The node’s output, which will be passed to the next node.
      */
     private Object executeNode(NodePlugin<Object, Object> node, Object input, NodeContext context) {
-         // Execute the node’s business logic.
          return node.process(input, context);
  
     }

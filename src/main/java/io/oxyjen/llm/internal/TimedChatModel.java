@@ -37,11 +37,8 @@ public final class TimedChatModel implements ChatModel {
 		Future<String> future = SHARED_EXECUTOR.submit(() -> delegate.chat(input));
 
         try {
-            // Wait for result with timeout
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            
         } catch (java.util.concurrent.TimeoutException e) {
-            // Cancel the task (interrupts the thread)
             future.cancel(true);
             
             throw new TimeoutException(
@@ -51,7 +48,6 @@ public final class TimedChatModel implements ChatModel {
             );
             
         } catch (ExecutionException e) {
-            // Unwrap the actual exception from the model
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException) {
                 throw (RuntimeException) cause;
