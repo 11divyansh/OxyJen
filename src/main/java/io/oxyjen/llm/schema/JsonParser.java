@@ -202,7 +202,7 @@ public final class JsonParser {
     		isDecimal = true;
     		pos++;
     		if (pos >= json.length() || !Character.isDigit(json.charAt(pos))) {
-    			throw new IllegalArgumentException("Expected digit after decimal point at position" + pos);
+    			throw new IllegalArgumentException("Expected digit after decimal point at position " + pos);
     		}
     		while (pos < json.length() && Character.isDigit(json.charAt(pos))) {
     			pos++;

@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -97,6 +100,69 @@ public class JsonParserTest {
 	    assertThrows(IllegalArgumentException.class,
 	            () -> JsonParser.parse("tru"));
 	}
-
+	@Test
+	void shouldParseEmptyArray() {
+	    Object result = JsonParser.parse("[]");
+	    assertEquals(Collections.emptyList(), result);
+	}
+	@Test
+	void shouldParseMixedArray() {
+	    List<?> result = (List<?>) JsonParser.parse("[1, \"a\", true, null]");
+	    out.println(result);
+	    assertEquals(4, result.size());
+	}
+	@Test
+	void shouldFailOnMissingCommaInArray() {
+	    assertThrows(IllegalArgumentException.class,
+	            () -> JsonParser.parse("[1 2]"));
+	}
+	@Test
+	void shouldParseEmptyObject() {
+	    Object result = JsonParser.parse("{}");
+	    assertEquals(Collections.emptyMap(), result);
+	}
+	@Test
+	void shouldParseSimpleObject() {
+	    Map<?, ?> result = (Map<?, ?>) JsonParser.parse("{\"a\":1}");
+	    out.println(result);
+	    assertEquals(1L, result.get("a"));
+	}
+	@Test
+	void shouldParseNestedObject() {
+	    Map<?, ?> result = (Map<?, ?>)
+	            JsonParser.parse("{\"a\":{\"b\":2}}");
+	    out.println(result);
+	    Map<?, ?> nested = (Map<?, ?>) result.get("a");
+	    out.println(nested);
+	    assertEquals(2L, nested.get("b"));
+	}
+	@Test
+	void shouldFailOnMissingColon() {
+	    assertThrows(IllegalArgumentException.class,
+	            () -> JsonParser.parse("{\"a\" 1}"));
+	}
+	@Test
+	void shouldFailOnTrailingComma() {
+	    assertThrows(IllegalArgumentException.class,
+	            () -> JsonParser.parse("{\"a\":1,}"));
+	}
+	@Test
+	void shouldHandleWhitespace() {
+	    Object result = JsonParser.parse("   {  \"a\" : 1 }   ");
+	    Map<?, ?> map = (Map<?, ?>) result;
+	    out.println(map);
+	    assertEquals(1L, map.get("a"));
+	}
+	@Test
+	void shouldFailOnTrailingGarbage() {
+	    assertThrows(IllegalArgumentException.class,
+	            () -> JsonParser.parse("{\"a\":1} garbage"));
+	}
+	@Test
+	void shouldParseDeepNesting() {
+	    Object result = JsonParser.parse("[[[1]]]");
+	    out.println(result);
+	    assertTrue(result instanceof List);
+	}
 
 }
