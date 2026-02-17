@@ -1,7 +1,9 @@
 package io.oxyjen.llm.schema;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -51,10 +53,14 @@ public final class JsonMapper {
     		return (T) Enum.valueOf((Class<Enum>) targetType, value.toString());
     	if (targetType == Optional.class) 
     		return (T) convertOptional(value, genericType);
+    	if (targetType.isArray())
+    		return (T) convertArray(value, targetType);
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
     private static Number convertNumber(Object value, Class<?> targetType) {
+    	if (!(value instanceof Number))
+    		throw new IllegalArgumentException("");
     	Number number = (Number) value;
     	if (targetType == int.class || targetType == Integer.class) 
     		return number.intValue();
@@ -79,6 +85,21 @@ public final class JsonMapper {
     	Object converted = convert(value, innerType, innerType);
     	return Optional.ofNullable(converted);
     	
+    }
+    private static Object convertArray(Object value, Class<?> arrayType) {
+    	if (!(value instanceof List))
+    		throw new IllegalArgumentException(
+                    "Expected JSON array for array type, got: " + value.getClass());
+    	List<?> jsonList = (List<?>) value;
+    	int size = jsonList.size();
+    	Class<?> componentType = arrayType.getComponentType();
+    	Object array = Array.newInstance(componentType, size);
+    	for (int i = 0; i <= size; i++) {
+    		Object element = jsonList.get(i);
+    		Object converted = convert(element, componentType, componentType);
+    		Array.set(array, i, converted);
+    	}
+    	return array;
     }
     private static boolean isNumericType(Class<?> type) {
     	return type == int.class || type == Integer.class ||
