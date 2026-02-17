@@ -18,12 +18,14 @@ public final class SchemaNode implements NodePlugin<String, Map<String,Object>> 
     private final JSONSchema schema;
     private final int maxRetries;
     private final String memoryKey;
+    private final SchemaEnforcer enforcer;
     
     private SchemaNode(Builder builder) {
         this.model = builder.model;
         this.schema = builder.schema;
         this.maxRetries = builder.maxRetries;
         this.memoryKey = builder.memoryKey;
+        this.enforcer = new SchemaEnforcer(model, schema, maxRetries);
     }
     
     @Override
@@ -33,8 +35,6 @@ public final class SchemaNode implements NodePlugin<String, Map<String,Object>> 
             context.memory(memoryKey).append("user", input);
         }
         
-        // Execute with schema enforcement
-        SchemaEnforcer enforcer = new SchemaEnforcer(model, schema, maxRetries);
         String jsonOutput = enforcer.execute(input);
         
         // Store output in memory
