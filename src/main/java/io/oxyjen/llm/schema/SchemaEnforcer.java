@@ -16,11 +16,14 @@ public final class SchemaEnforcer {
     private final ChatModel model;
     private final JSONSchema schema;
     private final int maxRetries;
+    private final String schemaJson;
+
     
     public SchemaEnforcer(ChatModel model, JSONSchema schema, int maxRetries) {
         this.model = model;
         this.schema = schema;
         this.maxRetries = maxRetries;
+        this.schemaJson = schema.toJSON();
     }
     
     public SchemaEnforcer(ChatModel model, JSONSchema schema) {
@@ -68,7 +71,7 @@ public final class SchemaEnforcer {
                "IMPORTANT:\n"+
         	   "Return ONLY a raw JSON object matching this schema:\n" +
                "Do not include any explanations, just the JSON. No markdown. \n\n" +
-               schema.toJSON();
+               schemaJson;
     }
     
     private String buildRetryPrompt(
@@ -82,7 +85,7 @@ public final class SchemaEnforcer {
                 "Previous JSON:\n" + invalidJSON + "\n\n" +
                 "Schema violations:\n" + result.formatErrors() + "\n\n" +
                 "Please return ONLY corrected JSON matching this schema:\n" +
-                schema.toJSON();
+                schemaJson;
     }
     
     private String extractJSON(String response) {
