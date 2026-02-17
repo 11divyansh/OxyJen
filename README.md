@@ -273,29 +273,11 @@ class FormatterNode implements NodePlugin<String, String> {
 
 ## Vision
 - Bring AI orchestration (LangChain/LangGraph style) to Java.  
-- Build enterprise-first modules: Spring Config Analyzer, GC/JVM Log Analyzer, Secure Workflow Engine.  
-- Focus on **performance, security, and observability**, because enterprises need more than toys.
+- Build enterprise-first modules: LLM agents, Audit tools, Secure complex Workflow Engine.  
+- Focus on **performance, security, and observability**.
 - I'm building this to learn java in a much deeper way.
 
-### **Phase 1: Foundation (v0.1 - DONE)**
-Clean, extensible architecture that makes building pipelines intuitive.
-
-### **Phase 2: AI Integration (v0.2 - Done)**
-First-class support for LLM providers:
-- **OpenAI** (GPT-4, GPT-3.5)
-
-
-
-### **Phase 3: Advanced Orchestration (v0.3 - Done)**
-Bringing Prompt intelligence and schema enforcement to Oxyjen, eliminating regex hell, and delivering structured LLM output
-- **JSON schema enforcement**
-- **Prompt templates**
-- **Timeout enforcement**
-- **Retry cap + Jitter**
-
-
-
-### **Also Planning on: Production & Enterprise (v0.4+)**
+### **Phase 4 in progress**
 - **RAG support** - Vector databases, embeddings, document loaders
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
@@ -313,6 +295,7 @@ Bringing Prompt intelligence and schema enforcement to Oxyjen, eliminating regex
 ## Documentation
 
 - [Oxyjen v0.2](docs/v0.2.md)
+- [Oxyjen v0.3](docs/v0.3.md)
 
 ---
 
@@ -338,7 +321,7 @@ Bringing Prompt intelligence and schema enforcement to Oxyjen, eliminating regex
 <dependency>
   <groupId>com.github.11divyansh</groupId>
   <artifactId>Oxyjen</artifactId>
-  <version>v0.2.0</version>
+  <version>v0.3.0</version>
 </dependency>
 ```
 
@@ -349,7 +332,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:Oxyjen:v0.2.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.3.0'
 }
 ```
 
