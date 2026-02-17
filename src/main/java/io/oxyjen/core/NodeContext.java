@@ -2,6 +2,7 @@ package io.oxyjen.core;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -35,6 +36,20 @@ public class NodeContext {
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
         return (T) data.get(key);
+    }
+    /**
+     * Retrieves an Optional containing the value if the key exists.
+     * Ex: String userId = context.require("userId", String.class);
+     */
+    public <T> Optional<T> get(String key, Class<T> type) {
+    	Object value = data.get(key);
+    	if (value == null) return Optional.empty();
+    	
+    	if (!type.isInstance(value))
+    		throw new IllegalStateException(
+    			"Value for key '" + key + "' is not of type " + type.getSimpleName()
+    		);
+    	return Optional.of(type.cast(value));
     }
 
     /**
