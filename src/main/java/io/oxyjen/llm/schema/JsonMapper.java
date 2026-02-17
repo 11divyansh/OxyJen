@@ -3,8 +3,12 @@ package io.oxyjen.llm.schema;
 import java.lang.reflect.Array;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Maps JSON strings to Java objects.
@@ -55,6 +59,8 @@ public final class JsonMapper {
     		return (T) convertOptional(value, genericType);
     	if (targetType.isArray())
     		return (T) convertArray(value, targetType);
+    	if (Collection.class.isAssignableFrom(targetType))
+    		return (T) convertCollection(value, targetType, genericType);
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
@@ -100,6 +106,28 @@ public final class JsonMapper {
     		Array.set(array, i, converted);
     	}
     	return array;
+    }
+    private static Object convertCollection(Object value, Class<?> collectionType, Type genericType) {
+    	if (!(value instanceof List))
+    		throw new IllegalArgumentException(
+                    "Expected JSON array for collection, got: " + value.getClass());
+    	List<?> jsonList = (List<?>) value;
+    	Class<?> elementType = extractGenericType(genericType,0);
+    	if(elementType == null) {
+    		throw new IllegalArgumentException(
+    				"Collection must have generic type parameter. Use List<String>, not raw List");
+    	}
+    	Collection<Object> result;
+    	if (Set.class.isAssignableFrom(collectionType))
+    		result = new LinkedHashSet<>();
+    	else 
+    		result = new ArrayList<>();
+    	
+    	for (Object element : jsonList) {
+    		Object converted = convert(element, elementType, elementType);
+    		result.add(converted);
+    	}
+    	return result;
     }
     private static boolean isNumericType(Class<?> type) {
     	return type == int.class || type == Integer.class ||
