@@ -5,8 +5,10 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -61,6 +63,8 @@ public final class JsonMapper {
     		return (T) convertArray(value, targetType);
     	if (Collection.class.isAssignableFrom(targetType))
     		return (T) convertCollection(value, targetType, genericType);
+    	if (Map.class.isAssignableFrom(targetType)) 
+            return (T) convertMap(value, genericType);
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
@@ -128,6 +132,34 @@ public final class JsonMapper {
     		result.add(converted);
     	}
     	return result;
+    }
+    @SuppressWarnings("unchecked")
+	private static Map<?, ?> convertMap(Object value, Type genericType) {
+        if (!(value instanceof Map)) {
+            throw new IllegalArgumentException(
+                "Expected JSON object for Map, got: " + value.getClass()
+            );
+        }
+        Map<String, Object> jsonMap = (Map<String, Object>) value;
+        Class<?> keyType = extractGenericType(genericType, 0);
+        Class<?> valueType = extractGenericType(genericType, 1);
+        if (keyType == null || valueType == null) {
+            throw new IllegalArgumentException(
+                "Map must have generic type parameters. Use Map<String, Integer>, not raw Map"
+            );
+        }
+        if (keyType != String.class) {
+            throw new IllegalArgumentException(
+                "Only String keys are supported for Maps. Got: " + keyType
+            );
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        for (Map.Entry<String, Object> entry : jsonMap.entrySet()) {
+            Object convertedValue = convert(entry.getValue(), valueType, valueType);
+            result.put(entry.getKey(), convertedValue);
+        }
+        return result;
     }
     private static boolean isNumericType(Class<?> type) {
     	return type == int.class || type == Integer.class ||
