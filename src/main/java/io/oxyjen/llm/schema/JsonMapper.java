@@ -3,6 +3,7 @@ package io.oxyjen.llm.schema;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
@@ -65,7 +66,7 @@ public final class JsonMapper {
     	if (Optional.class.isAssignableFrom(targetType)) 
     		return (T) convertOptional(value, genericType);
     	if (targetType.isArray())
-    		return (T) convertArray(value, targetType);
+    		return (T) convertArray(value, genericType);
     	if (Collection.class.isAssignableFrom(targetType))
     		return (T) convertCollection(value, targetType, genericType);
     	if (Map.class.isAssignableFrom(targetType)) 
@@ -118,31 +119,72 @@ public final class JsonMapper {
         return Optional.ofNullable(converted);
     	
     }
-    private static Object convertArray(Object value, Class<?> arrayType) {
-    	if (!(value instanceof List))
-    		throw new IllegalArgumentException(
-                    "Expected JSON array for array type, got: " + value.getClass());
-    	List<?> jsonList = (List<?>) value;
-    	int size = jsonList.size();
-    	Class<?> componentType = arrayType.getComponentType();
-    	Object array = Array.newInstance(componentType, size);
-    	for (int i = 0; i <= size; i++) {
-    		Object element = jsonList.get(i);
-    		Object converted = convert(element, componentType, componentType);
-    		Array.set(array, i, converted);
-    	}
-    	return array;
+    private static Object convertArray(Object value, Type arrayGenericType) {
+        if (!(value instanceof List<?> jsonList)) {
+            throw new IllegalArgumentException(
+                "Expected JSON array for array type"
+            );
+        }
+        Type componentFullType;
+
+        if (arrayGenericType instanceof GenericArrayType genericArrayType) {
+            componentFullType = genericArrayType.getGenericComponentType();
+        } 
+        else if (arrayGenericType instanceof Class<?> clazz) {
+            componentFullType = clazz.getComponentType();
+        } 
+        else {
+            throw new IllegalArgumentException("Unsupported array type");
+        }
+        Class<?> componentRawType;
+
+        if (componentFullType instanceof Class<?> c) {
+            componentRawType = c;
+        } 
+        else if (componentFullType instanceof ParameterizedType pt) {
+            componentRawType = (Class<?>) pt.getRawType();
+        } 
+        else {
+            throw new IllegalArgumentException("Unsupported component type");
+        }
+        int size = jsonList.size();
+        Object array = Array.newInstance(componentRawType, size);
+        for (int i = 0; i < size; i++) {
+            Object element = jsonList.get(i);
+            Object converted = convert(element, componentRawType, componentFullType);
+            Array.set(array, i, converted);
+        }
+        return array;
     }
     private static Object convertCollection(Object value, Class<?> collectionType, Type genericType) {
-    	if (!(value instanceof List))
+    	if (value == null)return null;
+    	if (!(value instanceof List<?> jsonList))
     		throw new IllegalArgumentException(
                     "Expected JSON array for collection, got: " + value.getClass());
-    	List<?> jsonList = (List<?>) value;
-    	Class<?> elementType = extractGenericType(genericType,0);
-    	if(elementType == null) {
+    	
+    	Type elementFullType = extractNestedGenericType(genericType,0);
+    	if(elementFullType == null) {
     		throw new IllegalArgumentException(
     				"Collection must have generic type parameter. Use List<String>, not raw List");
     	}
+    	Class<?> elementRawType;
+    	if (elementFullType instanceof Class<?> c) {
+    		elementRawType = c;
+    	}
+    	else if (elementFullType instanceof ParameterizedType pt) {
+    		Type raw = pt.getRawType();
+    		if(!(raw instanceof Class<?> rc)) {
+    			throw new IllegalArgumentException(
+    	                "Unsupported collection raw type: " + raw
+    	            );
+    		}
+    		elementRawType = rc;
+    	}
+    	else {
+            throw new IllegalArgumentException(
+                "Unsupported collection element type: " + elementFullType
+            );
+        }
     	Collection<Object> result;
     	if (Set.class.isAssignableFrom(collectionType))
     		result = new LinkedHashSet<>();
@@ -150,36 +192,53 @@ public final class JsonMapper {
     		result = new ArrayList<>();
     	
     	for (Object element : jsonList) {
-    		Object converted = convert(element, elementType, elementType);
+    		Object converted = convert(element, elementRawType, elementFullType);
     		result.add(converted);
     	}
     	return result;
     }
     @SuppressWarnings("unchecked")
 	private static Map<?, ?> convertMap(Object value, Type genericType) {
-        if (!(value instanceof Map)) {
+    	if (value == null) return null;
+        if (!(value instanceof Map<?,?> jsonMap)) {
             throw new IllegalArgumentException(
                 "Expected JSON object for Map, got: " + value.getClass()
             );
         }
-        Map<String, Object> jsonMap = (Map<String, Object>) value;
-        Class<?> keyType = extractGenericType(genericType, 0);
-        Class<?> valueType = extractGenericType(genericType, 1);
-        if (keyType == null || valueType == null) {
+        Type keyFullType = extractNestedGenericType(genericType, 0);
+        Type valueFullType = extractNestedGenericType(genericType, 1);
+        if (keyFullType == null || valueFullType == null) {
             throw new IllegalArgumentException(
                 "Map must have generic type parameters. Use Map<String, Integer>, not raw Map"
             );
         }
-        if (keyType != String.class) {
+        Class<?> keyRawType = (Class<?>)
+        		(keyFullType instanceof ParameterizedType pt
+        				? pt.getRawType()
+        				: keyFullType);
+        if (keyRawType != String.class) {
             throw new IllegalArgumentException(
-                "Only String keys are supported for Maps. Got: " + keyType
+                "Only String keys are supported for Maps. Got: " + keyRawType
+            );
+        }
+        
+        Class<?> valueRawType;
+        if (valueFullType instanceof Class<?> c) {
+            valueRawType = c;
+        } 
+        else if (valueFullType instanceof ParameterizedType pt) {
+            valueRawType = (Class<?>) pt.getRawType();
+        } 
+        else {
+            throw new IllegalArgumentException(
+                "Unsupported map value type: " + valueFullType
             );
         }
         Map<String, Object> result = new LinkedHashMap<>();
         
-        for (Map.Entry<String, Object> entry : jsonMap.entrySet()) {
-            Object convertedValue = convert(entry.getValue(), valueType, valueType);
-            result.put(entry.getKey(), convertedValue);
+        for (Map.Entry<?, ?> entry : jsonMap.entrySet()) {
+            Object convertedValue = convert(entry.getValue(), valueRawType, valueFullType);
+            result.put((String)entry.getKey(), convertedValue);
         }
         return result;
     }
