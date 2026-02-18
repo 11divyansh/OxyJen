@@ -1,6 +1,5 @@
 package io.oxyjen.llm.schema;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.GenericArrayType;
@@ -17,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Maps JSON strings to Java objects.
@@ -53,8 +53,9 @@ public final class JsonMapper {
     }
     @SuppressWarnings("unchecked")
     private static <T> T convert(Object value, Class<T> targetType, Type genericType) {
-    	if (value == null) 
-    		return null;
+    	if (Optional.class.isAssignableFrom(targetType)) 
+    		return (T) convertOptional(value, genericType);	
+    	if (value == null) return null;
     	if (targetType == String.class) 
     		return (T) value.toString();
     	if (isNumericType(targetType)) 
@@ -63,8 +64,6 @@ public final class JsonMapper {
     		return (T) Boolean.valueOf(value.toString());
     	if (targetType.isEnum()) 
     		return (T) Enum.valueOf((Class<Enum>) targetType, value.toString());
-    	if (Optional.class.isAssignableFrom(targetType)) 
-    		return (T) convertOptional(value, genericType);
     	if (targetType.isArray())
     		return (T) convertArray(value, genericType);
     	if (Collection.class.isAssignableFrom(targetType))
@@ -73,7 +72,6 @@ public final class JsonMapper {
             return (T) convertMap(value, genericType);
     	if (targetType.isRecord()) 
             return deserializeRecord((Map<String, Object>) value, targetType);
-  
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
@@ -97,6 +95,7 @@ public final class JsonMapper {
     	throw new IllegalArgumentException("Unsupported numeric type: " + targetType);
     }
     private static Optional<?> convertOptional(Object value, Type genericType) {
+    	if (value == null) return Optional.empty();
     	Type innerFullType = extractNestedGenericType(genericType, 0);
     	if (innerFullType == null) 
     		throw new IllegalArgumentException(
@@ -245,6 +244,17 @@ public final class JsonMapper {
     @SuppressWarnings("unchecked")
     private static <T> T deserializeRecord(Map<String, Object> jsonMap, Class<T> recordClass) {
         RecordComponent[] components = recordClass.getRecordComponents();
+        Set<String> allowedFields = Arrays.stream(components)
+                .map(RecordComponent::getName)
+                .collect(Collectors.toSet());
+
+        for (String key : jsonMap.keySet()) {
+            if (!allowedFields.contains(key)) {
+                throw new IllegalArgumentException(
+                    "Unknown field: " + key + " for record " + recordClass.getSimpleName()
+                );
+            }
+        }
         Object[] args = new Object[components.length];
         
         for (int i = 0; i < components.length; i++) {
@@ -279,6 +289,7 @@ public final class JsonMapper {
                     .map(RecordComponent::getType)
                     .toArray(Class[]::new)
             );
+            constructor.setAccessible(true);
             return constructor.newInstance(args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
