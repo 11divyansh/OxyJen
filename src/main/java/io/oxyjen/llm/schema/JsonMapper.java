@@ -1,9 +1,14 @@
 package io.oxyjen.llm.schema;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -57,7 +62,7 @@ public final class JsonMapper {
     		return (T) Boolean.valueOf(value.toString());
     	if (targetType.isEnum()) 
     		return (T) Enum.valueOf((Class<Enum>) targetType, value.toString());
-    	if (targetType == Optional.class) 
+    	if (Optional.class.isAssignableFrom(targetType)) 
     		return (T) convertOptional(value, genericType);
     	if (targetType.isArray())
     		return (T) convertArray(value, targetType);
@@ -65,6 +70,9 @@ public final class JsonMapper {
     		return (T) convertCollection(value, targetType, genericType);
     	if (Map.class.isAssignableFrom(targetType)) 
             return (T) convertMap(value, genericType);
+    	if (targetType.isRecord()) 
+            return deserializeRecord((Map<String, Object>) value, targetType);
+  
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
@@ -88,12 +96,26 @@ public final class JsonMapper {
     	throw new IllegalArgumentException("Unsupported numeric type: " + targetType);
     }
     private static Optional<?> convertOptional(Object value, Type genericType) {
-    	Class<?> innerType = extractGenericType(genericType, 0);
-    	if (innerType == null) 
+    	Type innerFullType = extractNestedGenericType(genericType, 0);
+    	if (innerFullType == null) 
     		throw new IllegalArgumentException(
     				"Optional must have generic type parameter");
-    	Object converted = convert(value, innerType, innerType);
-    	return Optional.ofNullable(converted);
+    	Class<?> innerRawType;
+
+        if (innerFullType instanceof Class<?>) {
+            innerRawType = (Class<?>) innerFullType;
+        } 
+        else if (innerFullType instanceof ParameterizedType) {
+            innerRawType = (Class<?>) 
+                ((ParameterizedType) innerFullType).getRawType();
+        } 
+        else {
+            throw new IllegalArgumentException(
+                "Unsupported Optional inner type: " + innerFullType
+            );
+        }
+        Object converted = convert(value, innerRawType, innerFullType);
+        return Optional.ofNullable(converted);
     	
     }
     private static Object convertArray(Object value, Class<?> arrayType) {
@@ -161,6 +183,53 @@ public final class JsonMapper {
         }
         return result;
     }
+    @SuppressWarnings("unchecked")
+    private static <T> T deserializeRecord(Map<String, Object> jsonMap, Class<T> recordClass) {
+        RecordComponent[] components = recordClass.getRecordComponents();
+        Object[] args = new Object[components.length];
+        
+        for (int i = 0; i < components.length; i++) {
+            RecordComponent component = components[i];
+            String fieldName = component.getName();
+            Class<?> fieldType = component.getType();
+            Type genericType = component.getGenericType();
+            
+            Object jsonValue = jsonMap.get(fieldName);
+            
+            if (jsonValue == null) {
+                if (isOptionalComponent(component)) {
+                    args[i] = getDefaultValue(fieldType);
+                    continue;
+                }
+                throw new IllegalArgumentException(
+                    "Missing required field: " + fieldName + " in " + recordClass.getSimpleName()
+                );
+            }
+            args[i] = convert(jsonValue, fieldType, genericType);
+        }
+        try {
+            Constructor<T> constructor = recordClass.getDeclaredConstructor(
+                Arrays.stream(components)
+                    .map(RecordComponent::getType)
+                    .toArray(Class[]::new)
+            );
+            return constructor.newInstance(args);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new RuntimeException(
+                "Failed to instantiate record " + recordClass.getSimpleName() + 
+                ": " + cause.getMessage(), cause
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(
+                "Failed to instantiate record " + recordClass.getSimpleName() + 
+                ": " + e.getMessage(), e
+            );
+        }
+    }
     private static boolean isNumericType(Class<?> type) {
     	return type == int.class || type == Integer.class ||
     		   type == long.class || type == Long.class ||
@@ -186,5 +255,38 @@ public final class JsonMapper {
         	return (Class<?>) ((ParameterizedType) argType).getRawType();
         }
         return null;
+    }
+    private static Type extractNestedGenericType(Type type, int index) {
+        if (!(type instanceof ParameterizedType)) {
+            return null;
+        }
+
+        ParameterizedType paramType = (ParameterizedType) type;
+        Type[] args = paramType.getActualTypeArguments();
+
+        if (index >= args.length) {
+            return null;
+        }
+        return args[index];
+    }
+    private static boolean isOptionalComponent(RecordComponent component) {
+        for (Annotation annotation : component.getAnnotations()) {
+            String name = annotation.annotationType().getSimpleName();
+            if (name.equals("Nullable") || name.equals("Optional")) {
+                return true;
+            }
+        }
+        return component.getType() == Optional.class;
+    }
+    private static Object getDefaultValue(Class<?> type) {
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == double.class) return 0.0;
+        if (type == float.class) return 0.0f;
+        if (type == short.class) return (short) 0;
+        if (type == byte.class) return (byte) 0;
+        if (type == boolean.class) return false;
+        if (type == char.class) return '\0';
+        return null; 
     }
 }
