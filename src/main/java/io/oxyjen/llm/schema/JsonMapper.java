@@ -256,13 +256,20 @@ public final class JsonMapper {
             Object jsonValue = jsonMap.get(fieldName);
             
             if (jsonValue == null) {
-                if (isOptionalComponent(component)) {
-                    args[i] = getDefaultValue(fieldType);
-                    continue;
-                }
-                throw new IllegalArgumentException(
-                    "Missing required field: " + fieldName + " in " + recordClass.getSimpleName()
-                );
+            	 if (fieldType == Optional.class) {
+            	        args[i] = Optional.empty();
+            	        continue;
+            	    }
+
+            	    if (!fieldType.isPrimitive()) {
+            	        args[i] = null;
+            	        continue;
+            	    }
+
+            	    throw new IllegalArgumentException(
+            	        "Missing required primitive field: " + fieldName +
+            	        " in " + recordClass.getSimpleName()
+            	    );
             }
             args[i] = convert(jsonValue, fieldType, genericType);
         }
@@ -327,25 +334,5 @@ public final class JsonMapper {
             return null;
         }
         return args[index];
-    }
-    private static boolean isOptionalComponent(RecordComponent component) {
-        for (Annotation annotation : component.getAnnotations()) {
-            String name = annotation.annotationType().getSimpleName();
-            if (name.equals("Nullable") || name.equals("Optional")) {
-                return true;
-            }
-        }
-        return component.getType() == Optional.class;
-    }
-    private static Object getDefaultValue(Class<?> type) {
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == double.class) return 0.0;
-        if (type == float.class) return 0.0f;
-        if (type == short.class) return (short) 0;
-        if (type == byte.class) return (byte) 0;
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        return null; 
     }
 }
