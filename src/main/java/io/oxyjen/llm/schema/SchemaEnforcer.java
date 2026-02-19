@@ -17,7 +17,6 @@ public final class SchemaEnforcer {
     private final JSONSchema schema;
     private final int maxRetries;
     private final String schemaJson;
-
     
     public SchemaEnforcer(ChatModel model, JSONSchema schema, int maxRetries) {
         this.model = model;
@@ -38,70 +37,88 @@ public final class SchemaEnforcer {
      */
     public String execute(String prompt) {
         SchemaValidator validator = new SchemaValidator(schema);
-        
-        // Add schema instruction to prompt
-        String enhancedPrompt = buildPromptWithSchema(prompt);
+        String currentPrompt = buildInitialPrompt(prompt);
         
         String lastResponse = null;
               
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            String response = model.chat(enhancedPrompt);
+            String response = model.chat(currentPrompt);
             lastResponse = response;
             
-            // Extract JSON (removing markdown fences (if present))
-            String json = extractJSON(response);
-            
-            SchemaValidator.ValidationResult result = validator.validate(json);
-            
+            String json;
+            try {
+            	json = extractJSON(response);
+            } catch (Exception extractionError) {
+            	currentPrompt = buildRetryPrompt(
+            			prompt,
+            			response,
+            			"Could not extract valid JSON object from response.",
+            			attempt);
+            	continue;
+            }
+            SchemaValidator.ValidationResult result = validator.validate(json);          
             if (result.isValid()) {
                 return json;
-            }
-            
-            enhancedPrompt = buildRetryPrompt(prompt, json, result,attempt);
-        }
-        
+            }            
+            currentPrompt = buildRetryPrompt(prompt, json, result.formatErrors(),attempt);
+        }       
         throw new SchemaException(
             "Failed to get valid JSON after " + maxRetries + " attempts",
             lastResponse
         );
     }
     
-    private String buildPromptWithSchema(String userPrompt) {
+    private String buildInitialPrompt(String userPrompt) {
         return userPrompt + "\n\n" +
-               "IMPORTANT:\n"+
-        	   "Return ONLY a raw JSON object matching this schema:\n" +
-               "Do not include any explanations, just the JSON. No markdown. \n\n" +
-               schemaJson;
+                "You MUST return a valid JSON object.\n" +
+                "Do NOT include explanations.\n" +
+                "Do NOT include markdown.\n" +
+                "Do NOT wrap the response in code blocks.\n" +
+                "Return ONLY raw JSON.\n\n" +
+                "The JSON must match this schema exactly:\n\n" +
+                schemaJson;
     }
     
     private String buildRetryPrompt(
     		String originalPrompt, 
-    		String invalidJSON, SchemaValidator.ValidationResult result,
+    		String previousOutput, String validationErrors,
     		int attempt
     	) {
     	return originalPrompt + "\n\n" +
                 "Attempt " + attempt + " failed.\n\n" +
                 "Your previous response did NOT match the required JSON schema.\n\n" +
-                "Previous JSON:\n" + invalidJSON + "\n\n" +
-                "Schema violations:\n" + result.formatErrors() + "\n\n" +
+                "Previous JSON:\n" + previousOutput + "\n\n" +
+                "Schema violations:\n" + validationErrors + "\n\n" +
+                "You MUST correct the JSON.\n" +
+                "Return ONLY valid JSON.\n" +
+                "No explanations.\n" +
+                "No markdown.\n\n" +
                 "Please return ONLY corrected JSON matching this schema:\n" +
                 schemaJson;
     }
     
     private String extractJSON(String response) {
-        // Remove markdown code fences if present
+
+    	if (response == null || response.isBlank()) {
+    		throw new IllegalArgumentException("Empty response from model");
+    	}
         String cleaned = response.trim();
         
-        if (cleaned.startsWith("```json")) {
-            cleaned = cleaned.substring(7);
-        }
         if (cleaned.startsWith("```")) {
-            cleaned = cleaned.substring(3);
+        	int firstNewline = cleaned.indexOf('\n');
+            if (firstNewline != -1) {
+                cleaned = cleaned.substring(firstNewline + 1);
+            }
+            if (cleaned.endsWith("```")) {
+                cleaned = cleaned.substring(0, cleaned.length() - 3);
+            }
         }
-        if (cleaned.endsWith("```")) {
-            cleaned = cleaned.substring(0, cleaned.length() - 3);
+        int start = cleaned.indexOf('{');
+        int end = cleaned.lastIndexOf('}');
+
+        if (start == -1 || end == -1 || end < start) {
+            throw new IllegalArgumentException("No JSON object found in model response");
         }
-        
-        return cleaned.trim();
+        return cleaned.substring(start, end+1).trim();
     }
 }
