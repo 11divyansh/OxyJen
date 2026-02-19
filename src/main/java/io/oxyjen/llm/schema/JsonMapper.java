@@ -4,6 +4,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
@@ -17,6 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import io.oxyjen.llm.schema.annotations.JsonIgnore;
 
 /**
  * Maps JSON strings to Java objects.
@@ -72,6 +75,14 @@ public final class JsonMapper {
             return (T) convertMap(value, genericType);
     	if (targetType.isRecord()) 
             return deserializeRecord((Map<String, Object>) value, targetType);
+    	if (isComplexType(targetType)) {
+    		if (!(value instanceof Map)) {
+    	        throw new IllegalArgumentException(
+    	            "Expected JSON object for type " + targetType.getSimpleName()
+    	        );
+    	    }
+            return deserializePOJO((Map<String, Object>) value, targetType);
+    	}    
     	throw new IllegalArgumentException(
     			"Unsupported type: " + targetType.getSimpleName());
     }
@@ -91,7 +102,6 @@ public final class JsonMapper {
     		return number.shortValue();
     	if (targetType == byte.class || targetType == Byte.class)
     		return number.byteValue();
-  
     	throw new IllegalArgumentException("Unsupported numeric type: " + targetType);
     }
     private static Optional<?> convertOptional(Object value, Type genericType) {
@@ -219,8 +229,7 @@ public final class JsonMapper {
             throw new IllegalArgumentException(
                 "Only String keys are supported for Maps. Got: " + keyRawType
             );
-        }
-        
+        }     
         Class<?> valueRawType;
         if (valueFullType instanceof Class<?> c) {
             valueRawType = c;
@@ -262,9 +271,26 @@ public final class JsonMapper {
             String fieldName = component.getName();
             Class<?> fieldType = component.getType();
             Type genericType = component.getGenericType();
-            
-            Object jsonValue = jsonMap.get(fieldName);
-            
+            if (component.isAnnotationPresent(JsonIgnore.class)) {
+                args[i] = getDefaultValue(fieldType);
+                continue;
+            }
+            boolean present = jsonMap.containsKey(fieldName);
+            Object jsonValue = jsonMap.get(fieldName);   
+            if (!present) {
+                if (fieldType == Optional.class) {
+                    args[i] = Optional.empty();
+                    continue;
+                }
+                if (!fieldType.isPrimitive()) {
+                    args[i] = null;
+                    continue;
+                }
+                throw new IllegalArgumentException(
+                    "Missing required primitive field: " + fieldName +
+                    " in " + recordClass.getSimpleName()
+                );
+            }
             if (jsonValue == null) {
             	 if (fieldType == Optional.class) {
             	        args[i] = Optional.empty();
@@ -275,7 +301,6 @@ public final class JsonMapper {
             	        args[i] = null;
             	        continue;
             	    }
-
             	    throw new IllegalArgumentException(
             	        "Missing required primitive field: " + fieldName +
             	        " in " + recordClass.getSimpleName()
@@ -307,6 +332,56 @@ public final class JsonMapper {
             );
         }
     }
+    @SuppressWarnings("unchecked")
+    private static <T> T deserializePOJO(Map<String, Object> jsonMap, Class<T> pojoClass) {
+    	List<Method> setters = Arrays.stream(pojoClass.getMethods())
+                .filter(JsonMapper::isSetter)
+                .toList();
+    	Set<String> validFields = setters.stream()
+    	        .map(JsonMapper::getFieldNameFromSetter)
+    	        .collect(Collectors.toSet());
+
+    	for (String key : jsonMap.keySet()) {
+    	    if (!validFields.contains(key)) {
+    	        throw new IllegalArgumentException(
+    	            "Unknown field: " + key + " for class " + pojoClass.getSimpleName()
+    	        );
+    	    }
+    	}
+        T instance;
+        try {
+            Constructor<T> constructor = pojoClass.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            instance = constructor.newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException(
+                "Failed to create instance of " + pojoClass.getSimpleName() + 
+                ". Ensure it has a no-arg constructor.", e
+            );
+        }
+        for (Method method : setters) {
+            String fieldName = getFieldNameFromSetter(method);
+            if (!jsonMap.containsKey(fieldName)) {
+                continue; 
+            }
+            Object jsonValue = jsonMap.get(fieldName); 
+//            if (jsonValue == null) {
+//                continue;
+//            }
+            Class<?> paramType = method.getParameterTypes()[0];
+            Type genericType = method.getGenericParameterTypes()[0];
+            Object convertedValue = convert(jsonValue, paramType, genericType);
+            try {
+                method.invoke(instance, convertedValue);
+            } catch (Exception e) {
+                throw new RuntimeException(
+                    "Failed to set field " + fieldName + " on " + 
+                    pojoClass.getSimpleName(), e
+                );
+            }
+        }
+        return instance;
+    }
     private static boolean isNumericType(Class<?> type) {
     	return type == int.class || type == Integer.class ||
     		   type == long.class || type == Long.class ||
@@ -315,23 +390,28 @@ public final class JsonMapper {
     		   type == short.class || type == Short.class ||
     		   type == byte.class || type == Byte.class;
     }
-    private static Class<?> extractGenericType(Type type, int index) {
-        if (!(type instanceof ParameterizedType)) {
-            return null;
-        }
-        ParameterizedType paramType = (ParameterizedType) type;
-        Type[] typeArgs = paramType.getActualTypeArguments();      
-        if (index >= typeArgs.length) {
-            return null;
-        }  
-        Type argType = typeArgs[index];
-        if (argType instanceof Class) {
-            return (Class<?>) argType;
-        }
-        if (argType instanceof ParameterizedType) {
-        	return (Class<?>) ((ParameterizedType) argType).getRawType();
-        }
-        return null;
+    private static boolean isComplexType(Class<?> type) {
+        return !type.isPrimitive() &&
+               !type.isEnum() &&
+               !type.isArray() &&
+               type != String.class &&
+               !Number.class.isAssignableFrom(type) &&
+               !Boolean.class.isAssignableFrom(type) &&
+               !Collection.class.isAssignableFrom(type) &&
+               !Map.class.isAssignableFrom(type) &&
+               !Optional.class.isAssignableFrom(type)
+;
+    }
+    private static boolean isSetter(Method method) {
+        String name = method.getName();     
+        return name.startsWith("set") &&
+               name.length() > 3 &&
+               method.getParameterCount() == 1 &&
+               method.getReturnType() == void.class;
+    }
+    private static String getFieldNameFromSetter(Method method) {
+        String name = method.getName().substring(3);
+        return Character.toLowerCase(name.charAt(0)) + name.substring(1);
     }
     private static Type extractNestedGenericType(Type type, int index) {
         if (!(type instanceof ParameterizedType)) {
@@ -345,5 +425,16 @@ public final class JsonMapper {
             return null;
         }
         return args[index];
+    }
+    private static Object getDefaultValue(Class<?> type) {
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == double.class) return 0.0;
+        if (type == float.class) return 0.0f;
+        if (type == short.class) return (short) 0;
+        if (type == byte.class) return (byte) 0;
+        if (type == boolean.class) return false;
+        if (type == char.class) return '\0';
+        return null; 
     }
 }

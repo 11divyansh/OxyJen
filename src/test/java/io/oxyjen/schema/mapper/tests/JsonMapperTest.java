@@ -16,6 +16,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import io.oxyjen.llm.schema.JsonMapper;
+import io.oxyjen.llm.schema.annotations.JsonIgnore;
 
 public class JsonMapperTest {
 
@@ -489,6 +490,17 @@ public class JsonMapperTest {
 	    assertArrayEquals(new int[]{1,2}, result.grid()[0]);
 	    assertArrayEquals(new int[]{3,4}, result.grid()[1]);
 	}
-
+	record Basic(@JsonIgnore int value) {}
+	@Test
+	void shouldIgnoreJsonIgnoreValue() {
+		String json = """
+				{
+					"value":999
+				}
+				""";
+	
+		Basic basic = JsonMapper.deserialize(json,Basic.class);
+		out.println("@JsonIgnore:"+basic.value());
+	}
 
 }
