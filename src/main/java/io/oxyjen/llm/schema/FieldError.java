@@ -8,7 +8,9 @@ public class FieldError {
         INVALID_ENUM_VALUE,
         INVALID_FORMAT,
         OUT_OF_RANGE,
-        PARSE_ERROR
+        PARSE_ERROR,
+        CONSTRAINT_VIOLATION,
+        UNKNOWN_FIELD
     }
     
     private final String fieldPath;

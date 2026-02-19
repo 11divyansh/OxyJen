@@ -63,8 +63,14 @@ public final class JsonMapper {
     		return (T) value.toString();
     	if (isNumericType(targetType)) 
     		return (T) convertNumber(value, targetType);
-    	if (targetType == boolean.class || targetType == Boolean.class) 
+    	if (targetType == boolean.class || targetType == Boolean.class) {
+    		if (!(value instanceof Boolean)) {
+    		    throw new IllegalArgumentException(
+    		        "Expected boolean but got: " + value
+    		    );
+    		}
     		return (T) Boolean.valueOf(value.toString());
+    	}
     	if (targetType.isEnum()) 
     		return (T) Enum.valueOf((Class<Enum>) targetType, value.toString());
     	if (targetType.isArray())
@@ -88,7 +94,7 @@ public final class JsonMapper {
     }
     private static Number convertNumber(Object value, Class<?> targetType) {
     	if (!(value instanceof Number))
-    		throw new IllegalArgumentException("");
+    		throw new IllegalArgumentException("Expected numeric value but got: " + value.getClass());
     	Number number = (Number) value;
     	if (targetType == int.class || targetType == Integer.class) 
     		return number.intValue();
@@ -399,8 +405,7 @@ public final class JsonMapper {
                !Boolean.class.isAssignableFrom(type) &&
                !Collection.class.isAssignableFrom(type) &&
                !Map.class.isAssignableFrom(type) &&
-               !Optional.class.isAssignableFrom(type)
-;
+               !Optional.class.isAssignableFrom(type);
     }
     private static boolean isSetter(Method method) {
         String name = method.getName();     

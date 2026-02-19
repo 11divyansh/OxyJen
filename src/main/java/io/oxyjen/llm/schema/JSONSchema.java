@@ -125,8 +125,6 @@ public final class JSONSchema {
         private final Long maximum;             // Max number value
         private final PropertySchema items;		// for arrays
         private final PropertySchema additionalProperties;
-
-
         
         public static class Builder {
             private SchemaType type;
@@ -301,6 +299,37 @@ public final class JSONSchema {
         
         public List<String> enumValues(){
         	return enumValues;
+        }
+        public JSONSchema nestedSchema() {
+            return nestedSchema;
+        }
+
+        public String pattern() {
+            return pattern;
+        }
+
+        public Integer minLength() {
+            return minLength;
+        }
+
+        public Integer maxLength() {
+            return maxLength;
+        }
+
+        public Long minimum() {
+            return minimum;
+        }
+
+        public Long maximum() {
+            return maximum;
+        }
+
+        public PropertySchema items() {
+            return items;
+        }
+
+        public PropertySchema additionalProperties() {
+            return additionalProperties;
         }
         
         public String toJSON() {
