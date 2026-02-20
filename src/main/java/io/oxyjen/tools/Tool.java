@@ -64,6 +64,15 @@ public interface Tool {
     ToolResult execute(Map<String, Object> input, NodeContext context) 
         throws ToolExecutionException;
     
+    // For typed objects
+    default <T> ToolResult execute(T input, NodeContext context) {
+        throw new UnsupportedOperationException(
+            "Typed execution not implemented for " + name()
+        );
+    }
+    
+    default boolean deterministic() { return true; }
+    
     /**
      * Optional: Check if this tool is safe to execute with given inputs.
      * 
