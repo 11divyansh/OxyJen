@@ -1,6 +1,7 @@
 package io.oxyjen.tools;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,6 +24,7 @@ public final class ToolResult {
     private final Instant timestamp;
     private final long executionTimeMs;
     private final Map<String, Object> metadata;
+    private final Throwable cause;
     
     private ToolResult(Builder builder) {
         this.success = builder.success;
@@ -34,6 +36,7 @@ public final class ToolResult {
         this.metadata = builder.metadata != null 
             ? Map.copyOf(builder.metadata) 
             : Map.of();
+        this.cause = builder.cause;
     }
     
     public static ToolResult success(String toolName, Object output) {
@@ -68,6 +71,9 @@ public final class ToolResult {
         return !success;
     }
     
+    public Optional<Throwable> getCause() {
+        return Optional.ofNullable(cause);
+    }
     public Object getOutput() {
         if (!success) {
             throw new IllegalStateException(
@@ -88,7 +94,17 @@ public final class ToolResult {
     public Optional<Object> getOutputSafe() {
         return success ? Optional.ofNullable(output) : Optional.empty();
     }
-    
+    @SuppressWarnings("unchecked")
+    public <T> Optional<T> getOutputSafe(Class<T> type) {
+        if (!success || output == null) {
+            return Optional.empty();
+        }
+        if (!type.isInstance(output)) {
+            return Optional.empty();
+        }
+        return Optional.of((T) output);
+    }
+   
     public String getError() {
         if (success) {
             throw new IllegalStateException("Cannot get error from successful result");
@@ -167,8 +183,9 @@ public final class ToolResult {
         private String error;
         private String toolName;
         private Instant timestamp;
-        private long executionTimeMs;
+        private long executionTimeMs = -1;
         private Map<String, Object> metadata;
+        private Throwable cause;
         
         public Builder success(boolean success) {
             this.success = success;
@@ -200,14 +217,47 @@ public final class ToolResult {
             return this;
         }
         
-        public Builder metadata(Map<String, Object> metadata) {
-            this.metadata = metadata;
+        public Builder metadata(String key, Object value) {
+        	if (this.metadata == null) {
+                this.metadata = new HashMap<>();
+            }
+        	this.metadata.put(key, value);
+            return this;
+        }
+        public Builder cause(Throwable cause) {
+            this.cause = cause;
             return this;
         }
         
         public ToolResult build() {
             if (toolName == null) {
                 throw new IllegalStateException("toolName is required");
+            }
+            if (success && error != null) {
+                throw new IllegalStateException(
+                    "Successful result cannot contain an error"
+                );
+            }
+
+            if (!success && output != null) {
+                throw new IllegalStateException(
+                    "Failed result cannot contain output"
+                );
+            }
+
+            if (success && output == null) {
+                throw new IllegalStateException(
+                    "Successful result must contain output"
+                );
+            }
+
+            if (!success && error == null) {
+                throw new IllegalStateException(
+                    "Failed result must contain error"
+                );
+            }
+            if (success && cause != null) {
+                throw new IllegalStateException("Successful result cannot have cause");
             }
             return new ToolResult(this);
         }
