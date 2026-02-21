@@ -66,23 +66,15 @@ public final class OpenAIClient {
      */
     public ChatResponse chat(ChatRequest request) {
         try {
-            // 1. Build HTTP request
             HttpRequest httpRequest = buildHttpRequest(request);
-            
-            // 2. Send request
             HttpResponse<String> response = httpClient.send(
                 httpRequest,
                 HttpResponse.BodyHandlers.ofString()
             );
-            
-            // 3. Handle errors
             if (response.statusCode() != 200) {
                 throw classifyError(response, request.model());
             }
-            
-            // 4. Parse response
-            return parseResponse(response.body());
-            
+            return parseResponse(response.body());    
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Request interrupted", e);
@@ -105,13 +97,11 @@ public final class OpenAIClient {
     }
     
     private String buildJsonBody(ChatRequest request) {
-        // Simple JSON building (no Jackson in v0.2)
         StringBuilder json = new StringBuilder();
         json.append("{");
         json.append("\"model\":\"").append(request.model()).append("\",");
         json.append("\"messages\":[");
-        
-        // Add messages
+
         for (int i = 0; i < request.messages().size(); i++) {
             Message msg = request.messages().get(i);
             if (i > 0) json.append(",");
@@ -122,36 +112,27 @@ public final class OpenAIClient {
         }
         
         json.append("]");
-        
-        // Add optional parameters
         if (request.temperature() != null) {
             json.append(",\"temperature\":").append(request.temperature());
         }
         if (request.maxTokens() != null) {
             json.append(",\"max_tokens\":").append(request.maxTokens());
-        }
-        
+        }        
         json.append("}");
         return json.toString();
     }
     
     private ChatResponse parseResponse(String responseBody) {
-        // Extract: choices[0].message.content
-        
+        // Extract: choices[0].message.content        
         try {
-            // Find "content": "..."
             int contentStart = responseBody.indexOf("\"content\":");
             if (contentStart == -1) {
                 throw new RuntimeException("No content in response");
             }
-            
-            // Find the opening quote after "content":
             int quoteStart = responseBody.indexOf("\"", contentStart + 10);
             if (quoteStart == -1) {
                 throw new RuntimeException("Malformed content field");
             }
-            
-            // Find the closing quote
             int quoteEnd = findClosingQuote(responseBody, quoteStart + 1);
             if (quoteEnd == -1) {
                 throw new RuntimeException("Malformed content field");
@@ -159,20 +140,14 @@ public final class OpenAIClient {
             
             String content = responseBody.substring(quoteStart + 1, quoteEnd);
             content = unescapeJson(content);
-            
-            // Extract token usage (only for cost tracking)
             TokenUsage usage = parseTokenUsage(responseBody);
-            
             return new ChatResponse(content, usage);
-            
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse response: " + e.getMessage(), e);
         }
     }
     
-    private TokenUsage parseTokenUsage(String responseBody) {
-        // Extract: usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
-        
+    private TokenUsage parseTokenUsage(String responseBody) {        
         try {
             int usageStart = responseBody.indexOf("\"usage\":");
             if (usageStart == -1) {
@@ -180,13 +155,10 @@ public final class OpenAIClient {
             }
             
             String usageSection = responseBody.substring(usageStart);
-            
             int promptTokens = extractNumber(usageSection, "\"prompt_tokens\":");
             int completionTokens = extractNumber(usageSection, "\"completion_tokens\":");
             int totalTokens = extractNumber(usageSection, "\"total_tokens\":");
-            
-            return new TokenUsage(promptTokens, completionTokens, totalTokens);
-            
+            return new TokenUsage(promptTokens, completionTokens, totalTokens);         
         } catch (Exception e) {
             return new TokenUsage(0, 0, 0);
         }
@@ -256,16 +228,12 @@ public final class OpenAIClient {
     
     private int extractNumber(String json, String key) {
         int keyPos = json.indexOf(key);
-        if (keyPos == -1) return 0;
-        
+        if (keyPos == -1) return 0;       
         int start = keyPos + key.length();
-        int end = start;
-        
-        // Find end of number
+        int end = start;       
         while (end < json.length() && Character.isDigit(json.charAt(end))) {
             end++;
-        }
-        
+        }     
         String numStr = json.substring(start, end).trim();
         return numStr.isEmpty() ? 0 : Integer.parseInt(numStr);
     }

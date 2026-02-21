@@ -53,6 +53,8 @@ public interface Tool {
      */
     JSONSchema inputSchema();
     
+    JSONSchema outputSchema();
+    
     /**
      * Execute the tool with validated inputs.
      * 
