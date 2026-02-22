@@ -3,6 +3,8 @@ package io.oxyjen.tools;
 import java.util.Map;
 import java.util.Objects;
 
+import io.oxyjen.llm.schema.JsonParser;
+
 /**
  * Represents an LLM's request to call a tool.
  * 
@@ -34,5 +36,128 @@ public final class ToolCall {
 
     public static ToolCall of(String id, String name, Map<String, Object> arguments) {
         return new ToolCall(id, name, arguments);
+    }
+ 
+    @SuppressWarnings("unused")
+	private static Map<String, Object> parseArgumentsJson(String json) {
+        if (json == null || json.trim().isEmpty() || json.equals("{}")) {
+            return Map.of();
+        }      
+        Object parsed = JsonParser.parse(json);
+        if (!(parsed instanceof Map)) {
+            throw new IllegalArgumentException(
+                "Tool arguments JSON must be an object, got: " +
+                (parsed == null ? "null" : parsed.getClass().getSimpleName())
+            );
+        }
+        @SuppressWarnings("unchecked")
+        Map<String,Object> map = (Map<String,Object>) parsed;
+        return map;
+    }
+    
+    public String getId() {
+        return id;
+    }
+
+    public boolean hasId() {
+        return id != null;
+    }
+    
+    /**
+     * Name of the tool to invoke.
+     * Must match a registered Tool's name().
+     */
+    public String getName() {
+        return name;
+    }
+    
+    public Map<String, Object> getArguments() {
+        return arguments;
+    }
+   
+    @SuppressWarnings("unchecked")
+    public <T> T getArgument(String key, Class<T> type) {
+        Object value = arguments.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!type.isInstance(value)) {
+            throw new ClassCastException(
+                String.format("Argument '%s' is %s, not %s",
+                    key, value.getClass().getSimpleName(), type.getSimpleName())
+            );
+        }
+        return (T) value;
+    }
+    
+    public boolean hasArgument(String key) {
+        return arguments.containsKey(key);
+    }
+    
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ToolCall{");
+        if (id != null) {
+            sb.append("id=").append(id).append(", ");
+        }
+        sb.append("name=").append(name);
+        if (!arguments.isEmpty()) {
+            sb.append(", args=").append(arguments);
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ToolCall toolCall = (ToolCall) o;
+        return Objects.equals(id, toolCall.id) &&
+               Objects.equals(name, toolCall.name) &&
+               Objects.equals(arguments, toolCall.arguments);
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, name, arguments);
+    }
+    
+    public static Builder builder() {
+        return new Builder();
+    }
+    
+    public static class Builder {
+        private String id;
+        private String name;
+        private Map<String, Object> arguments;
+        
+        public Builder id(String id) {
+            this.id = id;
+            return this;
+        }
+        
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+        
+        public Builder arguments(Map<String, Object> arguments) {
+            this.arguments = arguments;
+            return this;
+        }
+        
+        public Builder argument(String key, Object value) {
+            if (this.arguments == null) {
+                this.arguments = new java.util.HashMap<>();
+            }
+            this.arguments.put(key, value);
+            return this;
+        }
+        
+        public ToolCall build() {
+            return new ToolCall(id, name, arguments);
+        }
     }
 }
