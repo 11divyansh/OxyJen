@@ -77,10 +77,8 @@ public final class ToolValidator {
         JSONSchema schema = tool.inputSchema();
         if (schema != null) {
             try {
-                String json = toJson(call.getArguments());
-
                 SchemaValidator.ValidationResult result =
-                        new SchemaValidator(schema).validate(json);
+                        new SchemaValidator(schema).validate(call.getArguments());
 
                 if (!result.isValid()) {
                     errors.addAll(
@@ -119,45 +117,8 @@ public final class ToolValidator {
                 ? ValidationResult.valid(warnings)
                 : ValidationResult.invalid(errors, warnings);
     }
-    private static String toJson(Map<String, Object> map) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{");
-        boolean first = true;
-        for (Map.Entry<String, Object> e : map.entrySet()) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"").append(e.getKey()).append("\":");
-            sb.append(valueToJson(e.getValue()));
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-    private static String valueToJson(Object v) {
-        if (v == null) return "null";
-        if (v instanceof String s) {
-            return "\"" + s.replace("\"", "\\\"") + "\"";
-        }
-        if (v instanceof Number || v instanceof Boolean) {
-            return v.toString();
-        }
-        if (v instanceof Map<?,?> m) {
-            @SuppressWarnings("unchecked")
-            Map<String,Object> map = (Map<String,Object>) m;
-            return toJson(map);
-        }
-        if (v instanceof List<?> list) {
-            StringBuilder sb = new StringBuilder("[");
-            boolean first = true;
-            for (Object o : list) {
-                if (!first) sb.append(",");
-                first = false;
-                sb.append(valueToJson(o));
-            }
-            sb.append("]");
-            return sb.toString();
-        }
-        return "\"" + v.toString() + "\"";
-    }
+    // implement tool.outputSchema() to check for output schema
+   
     public static final class ValidationResult {
 
         private final boolean valid;

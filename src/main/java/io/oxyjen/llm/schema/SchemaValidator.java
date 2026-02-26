@@ -45,6 +45,23 @@ public final class SchemaValidator {
 
         return new ValidationResult(errors.isEmpty(), errors);
     }
+    public ValidationResult validate(Object parsed) {
+        List<FieldError> errors = new ArrayList<>();
+        if (!(parsed instanceof Map)) {
+            errors.add(new FieldError(
+                "$",
+                FieldError.ErrorType.WRONG_TYPE,
+                "object",
+                parsed,
+                "Root must be an object"
+            ));
+            return new ValidationResult(false, errors);
+        }
+        @SuppressWarnings("unchecked")
+        Map<String,Object> root = (Map<String,Object>) parsed;
+        validateObject(root, schema, "$", errors);
+        return new ValidationResult(errors.isEmpty(), errors);
+    }
     private static void validateObject(
             Map<String, Object> data,
             JSONSchema schema,
