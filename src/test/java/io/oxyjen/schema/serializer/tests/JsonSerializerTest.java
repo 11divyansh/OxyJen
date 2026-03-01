@@ -17,7 +17,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import io.oxyjen.llm.schema.JsonSerializer;
-import io.oxyjen.llm.schema.JsonSerializer.JsonSerializationException;
 
 public class JsonSerializerTest {
 
@@ -179,6 +178,7 @@ public class JsonSerializerTest {
 
 	    static class Node {
 	        Node next;
+	        public Node getNext() { return next; }
 	    }
 	    @Test
 	    void shouldFailOnCyclicReference() {

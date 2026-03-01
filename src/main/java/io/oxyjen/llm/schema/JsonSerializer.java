@@ -46,57 +46,55 @@ public final class JsonSerializer {
         if (obj instanceof Enum<?> e) return e.name();
         if (obj instanceof Optional<?> opt)
             return opt.isPresent() ? toJsonTree(opt.get(), visited) : null;
-        if (!(obj instanceof String
-        	      || obj instanceof Number
-        	      || obj instanceof Boolean
-        	      || obj instanceof Enum<?>
-        	      || obj instanceof Optional<?>)) {
-
-        	    if (visited.containsKey(obj)) {
-        	        throw new JsonSerializationException(
-        	            "Cyclic reference detected for type: "
-        	            + obj.getClass().getSimpleName(), null
-        	        );
-        	    }
-        	}
-        if (obj instanceof Collection<?> col) {
-        	visited.put(obj, Boolean.TRUE);
-            List<Object> list = new ArrayList<>();
-            for (Object item : col) {
-                list.add(toJsonTree(item,visited));
+        if (isComplexType(obj)) {
+            if (visited.containsKey(obj)) {
+                throw new JsonSerializationException(
+                    "Cyclic reference detected for type: "
+                            + obj.getClass().getSimpleName(),
+                    null
+                );
             }
-            visited.remove(obj);
-            return list;
-        }
-        if (obj.getClass().isArray()) {
-        	visited.put(obj, Boolean.TRUE);
-        	Object result = serializeArray(obj,visited);
-        	visited.remove(obj);
-            return result;
-        }
-        if (obj instanceof Map<?, ?> map) {
-        	visited.put(obj, Boolean.TRUE);
-            Map<String, Object> result = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-            	Object key = entry.getKey();
-            	if (key == null) {
-            	    throw new JsonSerializationException("Map contains null key", null);
-            	}
-                result.put(key.toString(), toJsonTree(entry.getValue(),visited));
+            visited.put(obj, Boolean.TRUE);
+            try {
+                if (obj instanceof Collection<?> col) {
+                    List<Object> list = new ArrayList<>();
+                    for (Object item : col) {
+                        list.add(toJsonTree(item, visited));
+                    }
+                    return list;
+                }
+                if (obj.getClass().isArray()) {
+                    return serializeArray(obj, visited);
+                }
+                if (obj instanceof Map<?, ?> map) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        Object key = entry.getKey();
+                        if (key == null) {
+                            throw new JsonSerializationException(
+                                    "Map contains null key",
+                                    null
+                            );
+                        }
+                        result.put(
+                                key.toString(),
+                                toJsonTree(entry.getValue(), visited)
+                        );
+                    }
+                    return result;
+                }
+                if (obj.getClass().isRecord()) {
+                    return serializeRecord(obj, visited);
+                }
+                return serializePojo(obj, visited);
+            } finally {
+                visited.remove(obj);
             }
-            visited.remove(obj);
-            return result;
         }
-        if (obj.getClass().isRecord()) {
-        	visited.put(obj, Boolean.TRUE);
-            Map<String, Object> result = serializeRecord(obj, visited);
-            visited.remove(obj);
-            return result;
-        }
-        visited.put(obj, Boolean.TRUE);
-        Map<String, Object> result = serializePojo(obj, visited);
-        visited.remove(obj);
-        return result;
+        throw new JsonSerializationException(
+                "Unsupported type: " + obj.getClass(),
+                null
+        );
     }
 
     private static Map<String, Object> serializeRecord(Object record, IdentityHashMap<Object, Boolean> visited) {
@@ -182,7 +180,13 @@ public final class JsonSerializer {
         }
         return Character.toLowerCase(name.charAt(0)) + name.substring(1);
     }
-
+    private static boolean isComplexType(Object obj) {
+        return !(obj instanceof String
+                || obj instanceof Number
+                || obj instanceof Boolean
+                || obj instanceof Enum<?>
+                || obj instanceof Optional<?>);
+    }
     public static class JsonSerializationException extends RuntimeException {
         public JsonSerializationException(String message, Throwable cause) {
             super(message, cause);
