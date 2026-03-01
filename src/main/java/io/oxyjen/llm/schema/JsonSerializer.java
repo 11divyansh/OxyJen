@@ -33,7 +33,10 @@ public final class JsonSerializer {
      * @param obj the object to serialize
      * @return Map, List, String, Number, Boolean, or null
      */
-    public static Object toJsonTree(Object obj, IdentityHashMap<Object, Boolean> visited) {
+    public static Object toJsonTree(Object obj) {
+    	return toJsonTree(obj, new IdentityHashMap<>());
+    }
+    private static Object toJsonTree(Object obj, IdentityHashMap<Object, Boolean> visited) {
         if (obj == null) return null;
         if (obj instanceof String
                 || obj instanceof Number
