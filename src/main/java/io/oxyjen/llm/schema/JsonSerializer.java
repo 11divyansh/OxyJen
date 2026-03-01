@@ -46,12 +46,19 @@ public final class JsonSerializer {
         if (obj instanceof Enum<?> e) return e.name();
         if (obj instanceof Optional<?> opt)
             return opt.isPresent() ? toJsonTree(opt.get(), visited) : null;
-        if (visited.containsKey(obj)) {
-            throw new JsonSerializationException(
-                "Cyclic reference detected for type: "
-                + obj.getClass().getSimpleName(), null
-            );
-        }
+        if (!(obj instanceof String
+        	      || obj instanceof Number
+        	      || obj instanceof Boolean
+        	      || obj instanceof Enum<?>
+        	      || obj instanceof Optional<?>)) {
+
+        	    if (visited.containsKey(obj)) {
+        	        throw new JsonSerializationException(
+        	            "Cyclic reference detected for type: "
+        	            + obj.getClass().getSimpleName(), null
+        	        );
+        	    }
+        	}
         if (obj instanceof Collection<?> col) {
         	visited.put(obj, Boolean.TRUE);
             List<Object> list = new ArrayList<>();
@@ -75,7 +82,7 @@ public final class JsonSerializer {
             	if (key == null) {
             	    throw new JsonSerializationException("Map contains null key", null);
             	}
-                result.put(entry.getKey().toString(), toJsonTree(entry.getValue(),visited));
+                result.put(key.toString(), toJsonTree(entry.getValue(),visited));
             }
             visited.remove(obj);
             return result;
@@ -98,7 +105,9 @@ public final class JsonSerializer {
         for (RecordComponent component : components) {
             String name = component.getName();
             try {
-                Object value = component.getAccessor().invoke(record);
+            	Method accessor = component.getAccessor();
+            	accessor.setAccessible(true);
+            	Object value = accessor.invoke(record);
                 map.put(name, toJsonTree(value,visited));
             } catch (Exception e) {
                 throw new JsonSerializationException(
@@ -119,6 +128,7 @@ public final class JsonSerializer {
             }
             String fieldName = fieldNameFromGetter(method);
             try {
+            	method.setAccessible(true);
                 Object value = method.invoke(pojo);
                 map.put(fieldName, toJsonTree(value,visited));
             } catch (Exception e) {
