@@ -224,6 +224,14 @@ public final class ToolResult {
         	this.metadata.put(key, value);
             return this;
         }
+        public Builder metadata(Map<String, Object> metadata) {
+            if (metadata == null) return this;
+            if (this.metadata == null) {
+                this.metadata = new HashMap<>();
+            }
+            this.metadata.putAll(metadata);
+            return this;
+        }
         public Builder cause(Throwable cause) {
             this.cause = cause;
             return this;
