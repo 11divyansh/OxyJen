@@ -1,6 +1,7 @@
 package io.oxyjen.tools;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -189,7 +190,13 @@ public final class ToolExecutor {
             Object output = rawResult.getOutput();
             Object jsonTree;
             try {
-                jsonTree = JsonSerializer.toJsonTree(output);
+                jsonTree = (output instanceof Map ||
+                        output instanceof List ||
+                        output instanceof String ||
+                        output instanceof Number ||
+                        output instanceof Boolean)
+                ? output
+                : JsonSerializer.toJsonTree(output);;
             } catch (Exception e) {
                 context.getLogger().severe(
                     "Failed to serialize tool output: " + e.getMessage()
