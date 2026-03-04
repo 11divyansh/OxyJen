@@ -1,6 +1,7 @@
 package io.oxyjen.tools;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,11 +122,18 @@ public final class ToolExecutor {
                     startTime,
                     context
                 );
-            }    
-            context.getLogger().info(
-                String.format("Executing tool: %s with args: %s", 
-                    toolName, call.getArguments())
-            );
+            } 
+            long estimated = tool.estimateExecutionTime();
+            if (estimated > 0 && estimated > 5000) {
+            	context.getLogger().warning("Tool "+ toolName +" estimated execution time: "+ estimated+ "ms");
+            }
+            long timeout = tool.timeoutMs();
+            if (timeout > 0) {
+                context.getLogger().info(
+                    "Tool " + toolName + " has timeout configured: " + timeout + "ms"
+                );
+                // Future enhancement: async execution with timeout enforcement
+            }
             ToolValidator.ValidationResult inputValidation = 
                 inputValidator.validate(call, tool, context);
             if (!inputValidation.isValid()) {
@@ -153,6 +161,9 @@ public final class ToolExecutor {
             }
             ToolResult rawResult;
             try {
+            	context.getLogger().info(
+                        String.format("Executing tool: %s with args: %s", 
+                            toolName, call.getArguments()));
                 rawResult = tool.execute(call.getArguments(), context);
             } catch (ToolExecutionException e) {
                 return buildFailure(
@@ -174,29 +185,24 @@ public final class ToolExecutor {
                     context
                 );
             }
-            if (rawResult.isFailure()) {
-                long duration = System.currentTimeMillis() - startTime;
-                context.getLogger().warning(
-                    String.format("Tool %s failed: %s", toolName, rawResult.getError())
-                );       
-                return ToolResult.builder()
-                    .toolName(toolName)
-                    .success(false)
-                    .error(rawResult.getError())
-                    .executionTimeMs(duration)
-                    .metadata(rawResult.getMetadata())
-                    .build();
+            if (rawResult.isFailure()) {   
+                return buildFailure(
+                		toolName,
+                		rawResult.getError(),
+                		startTime,
+                		context,
+                		rawResult.getMetadata());
             }
-            Object output = rawResult.getOutput();
+            Object typedOutput = rawResult.getOutput();
             Object jsonTree;
             try {
-                jsonTree = (output instanceof Map ||
-                        output instanceof List ||
-                        output instanceof String ||
-                        output instanceof Number ||
-                        output instanceof Boolean)
-                ? output
-                : JsonSerializer.toJsonTree(output);;
+                jsonTree = (typedOutput instanceof Map ||
+                		typedOutput instanceof List ||
+                		typedOutput instanceof String ||
+                		typedOutput instanceof Number ||
+                		typedOutput instanceof Boolean)
+                ? typedOutput
+                : JsonSerializer.toJsonTree(typedOutput);;
             } catch (Exception e) {
                 context.getLogger().severe(
                     "Failed to serialize tool output: " + e.getMessage()
@@ -218,16 +224,16 @@ public final class ToolExecutor {
                     outputValidator.validate(jsonTree);
                 
                 if (!outputValidation.isValid()) {
-                    context.getLogger().severe(
-                        "Tool output does not match schema: " + 
-                            outputValidation.formatErrors()
-                    );
+                    Map<String, Object> metadata = new HashMap<>();
+                    metadata.put("_outputValidationErrors", outputValidation.errors());
+                    if (call.getId() != null) metadata.put("_callId", call.getId());
                     return buildFailure(
                         toolName,
                         "Output validation failed: " + 
                             outputValidation.formatErrors(),
                         startTime,
-                        context
+                        context,
+                        metadata
                     );
                 }
             }
@@ -235,13 +241,17 @@ public final class ToolExecutor {
             context.getLogger().info(
                 String.format("Tool %s completed successfully in %dms", 
                     toolName, duration)
-            );           
+            ); 
+            Map <String, Object> metadata = new HashMap<>();
+            if (rawResult.getMetadata() != null) metadata.putAll(rawResult.getMetadata());
+            metadata.put("_jsonTree", jsonTree);
+            if (call.getId() != null) metadata.put("_callId", call.getId());
             return ToolResult.builder()
                 .toolName(toolName)
                 .success(true)
-                .output(jsonTree)
+                .output(typedOutput)
                 .executionTimeMs(duration)
-                .metadata(rawResult.getMetadata())
+                .metadata(metadata)
                 .build();           
         } catch (Exception e) {
             context.getLogger().severe(
@@ -261,6 +271,15 @@ public final class ToolExecutor {
             String error,
             long startTime,
             NodeContext context
+    ) {
+        return buildFailure(toolName, error, startTime, context, null);
+    }
+    private ToolResult buildFailure(
+            String toolName,
+            String error,
+            long startTime,
+            NodeContext context,
+            Map<String, Object> metadata
         ) {
             long duration = System.currentTimeMillis() - startTime;
             context.getLogger().severe(
@@ -271,6 +290,7 @@ public final class ToolExecutor {
                 .success(false)
                 .error(error)
                 .executionTimeMs(duration)
+                .metadata(metadata != null ? metadata : Map.of())
                 .build();
         }
         public Tool getTool(String name) {

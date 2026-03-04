@@ -88,6 +88,9 @@ public final class ToolResult {
      */
     @SuppressWarnings("unchecked")
     public <T> T getOutputAs(Class<T> type) {
+    	if (!type.isInstance(output))
+    		throw new ClassCastException(
+    				"Expected "+ type.getName() + " but got "+ output.getClass().getName());
         return (T) getOutput();
     }
 

@@ -101,4 +101,7 @@ public interface Tool {
     default long estimateExecutionTime() {
         return -1; 
     }
+    default long timeoutMs() {
+    	return -1;
+    }
 }

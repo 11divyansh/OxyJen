@@ -95,13 +95,6 @@ public final class ToolValidator {
         } else {
             warnings.add("Tool has no input schema");
         }
-        try {
-            if (!tool.isSafe(call.getArguments(), context)) {
-                errors.add("Tool safety check failed for: " + tool.name());
-            }
-        } catch (Exception e) {
-            errors.add("Tool safety check threw exception: " + e.getMessage());
-        }
 
         //Strict mode: detect unknown fields manually if needed
         if (strictMode && schema != null) {
