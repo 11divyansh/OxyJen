@@ -2,6 +2,7 @@ package io.oxyjen.tools;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Set;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
@@ -68,10 +69,20 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
 		this.nodeName = name;
 		this.executor = new ToolExecutor(tools);
 	}
+	/**
+     * Create ToolNode with existing executor (for sharing executors).
+     */
+    public ToolNode(ToolExecutor executor) {
+        this("ToolNode", executor);
+    }
+    public ToolNode(String name, ToolExecutor executor) {
+        this.nodeName = name;
+        this.executor = java.util.Objects.requireNonNull(executor, 
+            "ToolExecutor cannot be null");
+    }
 	
 	@Override
 	public ToolResult process(ToolCall input, NodeContext context) {
-		// TODO Auto-generated method stub
 		return executor.execute(input, context);
 	}
 	@Override
@@ -99,5 +110,14 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
         context.getLogger().severe(
             String.format("Error in %s: %s", getName(), e.getMessage())
         );
+    }
+    public ToolExecutor getExecutor() {
+        return executor;
+    }
+    public boolean hasTool(String toolName) {
+        return executor.hasTool(toolName);
+    }
+    public Set<String> getToolNames() {
+        return executor.getToolNames();
     }
 }
