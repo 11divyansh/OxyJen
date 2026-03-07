@@ -2,6 +2,7 @@ package io.oxyjen.tools;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Set;
 
 import io.oxyjen.core.NodeContext;
@@ -55,6 +56,7 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
 
 	private final ToolExecutor executor;
 	private final String nodeName;
+	private final String displayName;
 	
 	public ToolNode(Tool... tools) {
 		this(Arrays.asList(tools));
@@ -66,8 +68,10 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
 		this(name, Arrays.asList(tools));
 	}
 	public ToolNode(String name, Collection<Tool> tools) {
-		this.nodeName = name;
-		this.executor = new ToolExecutor(tools);
+		this.nodeName = Objects.requireNonNull(name, "Node name cannot be null");
+		this.executor = new ToolExecutor(
+				Objects.requireNonNull(tools, "Tools cannot be null"));
+		this.displayName = buildDisplayName();
 	}
 	/**
      * Create ToolNode with existing executor (for sharing executors).
@@ -79,36 +83,49 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
         this.nodeName = name;
         this.executor = java.util.Objects.requireNonNull(executor, 
             "ToolExecutor cannot be null");
+        this.displayName = buildDisplayName();
+    }
+    private String buildDisplayName() {
+        return nodeName + "[" + executor.getToolCount() + " tools]";
     }
 	
 	@Override
 	public ToolResult process(ToolCall input, NodeContext context) {
+		Objects.requireNonNull(input, "ToolCall cannot be null");
+        Objects.requireNonNull(context, "NodeContext cannot be null");
 		return executor.execute(input, context);
 	}
 	@Override
     public String getName() {
-        return nodeName + "[" + executor.getToolCount() + " tools]";
+        return displayName;
     }
     
     @Override
     public void onStart(NodeContext context) {
-        context.getLogger().info(
-            String.format("Starting %s with %d available tools: %s",
-                getName(),
-                executor.getToolCount(),
-                executor.getToolNames())
-        );
+    	context.getLogger().log(
+                java.util.logging.Level.INFO,
+                () -> String.format(
+                    "Starting %s with %d tools: %s",
+                    displayName,
+                    executor.getToolCount(),
+                    executor.getToolNames()
+                )
+            );
     }
     
     @Override
     public void onFinish(NodeContext context) {
-        context.getLogger().info("Finished " + getName());
+    	context.getLogger().log(
+                java.util.logging.Level.INFO,
+                () -> "Finished " + displayName
+            );
     }
     
     @Override
     public void onError(Exception e, NodeContext context) {
-        context.getLogger().severe(
-            String.format("Error in %s: %s", getName(), e.getMessage())
+        context.getLogger().log(java.util.logging.Level.SEVERE,
+        		"Error in "+ displayName,
+        		e
         );
     }
     public ToolExecutor getExecutor() {
