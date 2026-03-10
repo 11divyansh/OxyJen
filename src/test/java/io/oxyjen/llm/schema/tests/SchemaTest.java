@@ -195,19 +195,20 @@ public class SchemaTest {
 	}
 
 	@Test
-	void schemaNodeReturnsMap() {
-		log("Schema node map test");
+	void schemaNodeMapsResultToRecord() {
+		log("SchemaNode maps result to record");
+		record User(String name) {}
 	    ChatModel model = new FakeModel("{\"name\":\"Bob\"}");
 	    JSONSchema schema = JSONSchema.object()
 	        .property("name", PropertySchema.string("Name"))
 	        .required("name")
 	        .build();
-	    SchemaNode node = SchemaNode.builder()
+	    SchemaNode<User> node = SchemaNode.builder(User.class)
 	        .model(model)
 	        .schema(schema)
 	        .build();
-	    Map<String,Object> result = node.process("prompt", new NodeContext());
+	    User result = node.process("prompt", new NodeContext());
 	    out.println(result);
-	    assertEquals("Bob", result.get("name"));
+	    assertEquals("Bob", result.name());
 	}
 }
