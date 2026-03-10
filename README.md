@@ -296,6 +296,7 @@ class FormatterNode implements NodePlugin<String, String> {
 
 - [Oxyjen v0.2](docs/v0.2.md)
 - [Oxyjen v0.3](docs/v0.3.md)
+- [Oxyjen v0.4](docs/v0.4.md)
 
 ---
 
