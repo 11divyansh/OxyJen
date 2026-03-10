@@ -1,6 +1,7 @@
 package io.oxyjen.tools;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.stream.Collectors;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.schema.JsonSerializer;
 import io.oxyjen.llm.schema.SchemaValidator;
+import io.oxyjen.tools.safety.ToolPermission;
 
 /**
  * Runtime engine for executing tools with validation and safety checks.
@@ -51,13 +53,18 @@ public final class ToolExecutor {
 	private final Map<String, Tool> registry;
     private final ToolValidator inputValidator;
     private final boolean validateOutput;
+    private final List<ToolPermission> permissions;
     
     /**
      * Create executor with default settings.
      * @param tools List of available tools
      */
     public ToolExecutor(Collection<Tool> tools) {
-        this(tools, true, true);
+        this(tools, true, true, List.of());
+    }
+    public ToolExecutor(Collection<Tool> tools, ToolPermission... permissions) {
+        this(tools, true, true, 
+        		permissions == null ? List.of():List.of(permissions));
     }
     
     /**
@@ -70,7 +77,8 @@ public final class ToolExecutor {
     public ToolExecutor(
         Collection<Tool> tools,
         boolean strictInputValidation,
-        boolean validateOutput
+        boolean validateOutput,
+        Collection<ToolPermission> permissions
     ) {
         Objects.requireNonNull(tools, "Tools collection cannot be null");
         this.registry = tools.stream()
@@ -82,12 +90,16 @@ public final class ToolExecutor {
                         "Duplicate tool name: " + existing.name()
                     );
                 }
-            ));   
-        this.inputValidator = new ToolValidator(strictInputValidation);
-        this.validateOutput = validateOutput;     
+            ));  
         if (registry.isEmpty()) {
             throw new IllegalArgumentException("Cannot create executor with empty tool list");
         }
+        this.inputValidator = new ToolValidator(strictInputValidation);
+        this.validateOutput = validateOutput;    
+        this.permissions = permissions == null
+        		? List.of()
+        		: permissions.stream().sorted(Comparator.comparingInt(ToolPermission::priority))
+        		.collect(Collectors.toUnmodifiableList());
     }
     /**
      * Execute a tool call with full validation and safety checks.
@@ -123,6 +135,18 @@ public final class ToolExecutor {
                     context
                 );
             } 
+            for (ToolPermission permission : permissions) {
+                if (!permission.isAllowed(tool, call, context)) {
+                    String reason = permission.getReason(tool, call, context);
+                    return buildFailure(
+                        toolName,
+                        reason != null ? reason : "Tool execution denied",
+                        startTime,
+                        context,
+                        Map.of("_permissionDenied", true)
+                    );
+                }
+            }
             long estimated = tool.estimateExecutionTime();
             if (estimated > 0 && estimated > 5000) {
             	context.getLogger().warning("Tool "+ toolName +" estimated execution time: "+ estimated+ "ms");
@@ -160,11 +184,16 @@ public final class ToolExecutor {
                 );
             }
             ToolResult rawResult;
+            boolean success = false;
             try {
             	context.getLogger().info(
                         String.format("Executing tool: %s with args: %s", 
                             toolName, call.getArguments()));
+            	for (ToolPermission permission : permissions) {
+            	    permission.beforeExecution(tool, call, context);
+            	}
                 rawResult = tool.execute(call.getArguments(), context);
+                success = !rawResult.isFailure();
             } catch (ToolExecutionException e) {
                 return buildFailure(
                     toolName,
@@ -185,6 +214,11 @@ public final class ToolExecutor {
                     context
                 );
             }
+            finally {
+            	for (ToolPermission permission : permissions) {
+                    permission.afterExecution(tool, call, success, context);
+                }
+            }
             if (rawResult.isFailure()) {   
                 return buildFailure(
                 		toolName,
@@ -197,7 +231,7 @@ public final class ToolExecutor {
             Object jsonTree;
             try {
                 jsonTree = (typedOutput instanceof Map ||
-                		typedOutput instanceof List ||
+                		typedOutput instanceof Collection ||
                 		typedOutput instanceof String ||
                 		typedOutput instanceof Number ||
                 		typedOutput instanceof Boolean)
