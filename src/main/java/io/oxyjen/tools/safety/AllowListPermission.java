@@ -2,6 +2,7 @@ package io.oxyjen.tools.safety;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import io.oxyjen.core.NodeContext;
@@ -56,17 +57,10 @@ public final class AllowListPermission implements ToolPermission {
         return allowedTools;
     }
     
-    /**
-     * Create restrictive allowlist (RECOMMENDED), only allowed tool will execute.
-     */
     public static Builder allowOnly() {
         return new Builder(false);
     }
     
-    /**
-     * Create permissive blocklist.
-     * All tools allowed except those explicitly blocked.
-     */
     public static Builder blockOnly() {
         return new Builder(true);
     }
@@ -93,7 +87,12 @@ public final class AllowListPermission implements ToolPermission {
          * - In blockOnly mode: this tool is BLOCKED
          */
         public Builder add(String toolName) {
-            tools.add(toolName);
+        	Objects.requireNonNull(toolName, "Tool name cannot be null");
+        	String normalized = toolName.trim().toLowerCase();
+        	if (normalized.isEmpty()) {
+        		throw new IllegalArgumentException("Tool name cannot be empty");
+        	}
+            tools.add(normalized);
             return this;
         }
         
@@ -124,12 +123,20 @@ public final class AllowListPermission implements ToolPermission {
         }
         
         public Builder addAll(String... toolNames) {
-            Collections.addAll(tools, toolNames);
+            for (String toolName : toolNames) {
+                add(toolName);
+            }
             return this;
         }
         
         public AllowListPermission build() {
             return new AllowListPermission(tools, defaultAllow);
         }
+    }
+    @Override
+    public String toString() {
+        return defaultAllow
+            ? "AllowListPermission(block=" + allowedTools + ")"
+            : "AllowListPermission(allow=" + allowedTools + ")";
     }
 }
