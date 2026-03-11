@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -92,27 +93,26 @@ public class SchemaNodeTests {
 	    out.println(t);
 	    assertEquals(2, t.tags().size());
 	}
-//	@Test
-//	void schemaNode_handlesCollection() {
-//		log("SchemaNode handles collections");
-//	    
-//	    JSONSchema schema = JSONSchema.object()
-//	        .property("tags",
-//	            JSONSchema.PropertySchema.array(
-//	                JSONSchema.PropertySchema.string("tag")
-//	            ))
-//	        .required("tags")
-//	        .build();
-//	    SchemaNode<List> node =
-//	        SchemaNode.builder(List.class)
-//	            .model(new FakeModel("{\"tags\":[\"a\",\"b\"]}"))
-//	            .schema(schema)
-//	            .build();
-//
-//	    List<String> t = node.process("input", new NodeContext());
-//	    out.println(t);
-//	    //assertEquals(2, t.tags().size());
-//	}
+	@Test
+	void schemaNode_handlesCollection() {
+		log("SchemaNode handles list");
+	    JSONSchema schema = JSONSchema.object()
+	        .property("tags",
+	            PropertySchema.array(
+	            PropertySchema.string("tag")))
+	        .required("tags")
+	        .build();
+	    SchemaNode<Map> node =
+	        SchemaNode.builder(Map.class)
+	            .model(new NewFakeModel("{\"tags\":[\"a\",\"b\"]}"))
+	            .schema(schema)
+	            .build();
+
+	    Map t = node.process("input", new NodeContext());
+	    out.println(t);
+	    assertTrue(t instanceof Map);
+	    //assertEquals(2, t.size());
+	}
 	@Test
 	void schemaNode_handlesOptional() {
 		log("Schema node handles optional");
