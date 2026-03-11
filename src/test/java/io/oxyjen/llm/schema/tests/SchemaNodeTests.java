@@ -3,6 +3,7 @@ package io.oxyjen.llm.schema.tests;
 import static java.lang.System.out;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -10,6 +11,9 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import io.oxyjen.core.Executor;
+import io.oxyjen.core.Graph;
+import io.oxyjen.core.GraphBuilder;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.schema.JSONSchema;
@@ -190,5 +194,43 @@ public class SchemaNodeTests {
 	    node.process("hello", ctx);
 	    out.println(ctx.memory("test").entries());
 	    assertFalse(ctx.memory("test").entries().isEmpty());
+	}
+	@Test
+	void schemaNode_worksInsideGraph() {
+		log("SchemaNode works inside graph");
+	    record Ticket(String name){}
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", JSONSchema.PropertySchema.string("name"))
+	        .required("name")
+	        .build();
+	    SchemaNode<Ticket> node =
+	        SchemaNode.<Ticket>builder(Ticket.class)
+	            .model(new FakeModel("{\"name\":\"John\"}"))
+	            .schema(schema)
+	            .build();
+	    Graph graph = GraphBuilder.named("test")
+	        .addNode(node)
+	        .build();
+	    Executor executor = new Executor();
+	    Object result = executor.run(graph,"input",new NodeContext());
+	    out.println(result);
+	    assertTrue(result instanceof Ticket);
+	}
+	@Test
+	void schemaNode_throwsOnInvalidOutput() {
+	    record Ticket(String name){}
+	    JSONSchema schema = JSONSchema.object()
+	        .property("name", JSONSchema.PropertySchema.string("name"))
+	        .required("name")
+	        .build();
+	    SchemaNode<Ticket> node =
+	        SchemaNode.builder(Ticket.class)
+	            .model(new FakeModel("{}"))
+	            .schema(schema)
+	            .maxRetries(1)
+	            .build();
+	    assertThrows(Exception.class, () ->
+	        node.process("input", new NodeContext())
+	    );
 	}
 }
