@@ -95,6 +95,71 @@ public final class ToolSandbox {
             );
         }
     }
+    /**
+     * Check if a path is within allowed directories.
+     * 
+     * CRITICAL: Use this in file tools before any file operation.
+     */
+    public boolean isPathAllowed(String path) {
+        if (path == null || path.isEmpty()) 
+            return false;   
+        if (allowedDirectories.isEmpty()) 
+            return true;  
+        try {
+            Path normalized = Paths.get(path).toAbsolutePath().normalize();
+            for (Path allowedDir : allowedDirectories) {
+                if (normalized.startsWith(allowedDir)) {
+                    return true;
+                }
+            }      
+            return false;     
+        } catch (Exception e) {
+            // if path is invalid deny it
+            return false;
+        }
+    }
+    /**
+     * Validate that a path is allowed, throw exception if not.
+     * 
+     * Use this at the start of file operations:
+     * <pre>
+     * sandbox.validatePath(filePath);
+     * // Now safe to read/write file
+     * </pre>
+     */
+    public void validatePath(String path) throws SecurityException {
+        if (!isPathAllowed(path)) {
+            throw new SecurityException(
+                String.format(
+                    "Path '%s' is outside allowed directories: %s",
+                    path, allowedDirectories
+                )
+            );
+        }
+    }
+
+    public String normalizePath(String path) throws SecurityException {
+        if (path == null || path.isEmpty()) {
+            throw new SecurityException("Path cannot be null or empty");
+        }       
+        try {
+            Path normalized = Paths.get(path).toAbsolutePath().normalize();
+            String normalizedStr = normalized.toString();            
+            if (!isPathAllowed(normalizedStr)) {
+                throw new SecurityException(
+                    String.format(
+                        "Path '%s' (normalized to '%s') is not allowed",
+                        path, normalizedStr
+                    )
+                );
+            }            
+            return normalizedStr;     
+        } catch (SecurityException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SecurityException("Invalid path: " + path, e);
+        }
+    }
     
     public Set<Path> getAllowedDirectories() {
         return allowedDirectories;
@@ -104,6 +169,17 @@ public final class ToolSandbox {
         return timeoutMs;
     }
     
+    public void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
     public static Builder builder() {
         return new Builder();
     }
@@ -123,6 +199,12 @@ public final class ToolSandbox {
             return this;
         }
         
+        public Builder allowedDirectories(String... directories) {
+            for (String dir : directories) {
+                allowedDirectory(dir);
+            }
+            return this;
+        }
         public Builder timeout(long duration, TimeUnit unit) {
             this.timeoutMs = unit.toMillis(duration);
             return this;
