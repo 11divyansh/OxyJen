@@ -1,5 +1,6 @@
 package io.oxyjen.tools;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.schema.JsonSerializer;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.tools.safety.ToolPermission;
+import io.oxyjen.tools.safety.ToolSandbox;
 
 /**
  * Runtime engine for executing tools with validation and safety checks.
@@ -54,17 +56,21 @@ public final class ToolExecutor {
     private final ToolValidator inputValidator;
     private final boolean validateOutput;
     private final List<ToolPermission> permissions;
+    private final ToolSandbox sandbox;
     
     /**
      * Create executor with default settings.
      * @param tools List of available tools
      */
     public ToolExecutor(Collection<Tool> tools) {
-        this(tools, true, true, List.of());
+        this(tools, true, true, List.of(), ToolSandbox.basic());
     }
-    public ToolExecutor(Collection<Tool> tools, ToolPermission... permissions) {
+    public ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox) {
+        this(tools, true, true, List.of(), sandbox);
+    }
+    public ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox, ToolPermission... permissions) {
         this(tools, true, true, 
-        		permissions == null ? List.of():List.of(permissions));
+        		permissions == null ? List.of():List.of(permissions), sandbox);
     }
     
     /**
@@ -74,11 +80,12 @@ public final class ToolExecutor {
      * @param strictInputValidation If true, fail on schema violations
      * @param validateOutput If true, validate tool output against outputSchema
      */
-    public ToolExecutor(
+    private ToolExecutor(
         Collection<Tool> tools,
         boolean strictInputValidation,
         boolean validateOutput,
-        Collection<ToolPermission> permissions
+        Collection<ToolPermission> permissions,
+        ToolSandbox sandbox
     ) {
         Objects.requireNonNull(tools, "Tools collection cannot be null");
         this.registry = tools.stream()
@@ -100,6 +107,7 @@ public final class ToolExecutor {
         		? List.of()
         		: permissions.stream().sorted(Comparator.comparingInt(ToolPermission::priority))
         		.collect(Collectors.toUnmodifiableList());
+        this.sandbox = sandbox == null ? ToolSandbox.basic() : sandbox;
     }
     /**
      * Execute a tool call with full validation and safety checks.
@@ -192,7 +200,7 @@ public final class ToolExecutor {
             	for (ToolPermission permission : permissions) {
             	    permission.beforeExecution(tool, call, context);
             	}
-                rawResult = tool.execute(call.getArguments(), context);
+                rawResult = sandbox.execute(() -> tool.execute(call.getArguments(), context));
                 success = !rawResult.isFailure();
             } catch (ToolExecutionException e) {
                 return buildFailure(
@@ -349,5 +357,66 @@ public final class ToolExecutor {
                 "ToolExecutor{tools=%d, validateOutput=%s}",
                 registry.size(), validateOutput
             );
+        }
+        public static Builder builder() {
+            return new Builder();
+        }
+        public static class Builder {
+
+            private Collection<Tool> tools = new ArrayList<>();
+            private boolean strictInputValidation = true;
+            private boolean validateOutput = true;
+            private ToolSandbox sandbox = ToolSandbox.basic();
+            private final List<ToolPermission> permissions = new ArrayList<>();
+
+            private Builder() {}
+
+            public Builder tools(Collection<Tool> tools) {
+            	this.tools.addAll(tools);
+                return this;
+            }
+
+            public Builder addTool(Tool tool) {
+                if (this.tools.isEmpty()) {
+                    this.tools = new ArrayList<>();
+                }
+                ((Collection<Tool>) this.tools).add(tool);
+                return this;
+            }
+
+            public Builder strictInputValidation(boolean value) {
+                this.strictInputValidation = value;
+                return this;
+            }
+
+            public Builder validateOutput(boolean value) {
+                this.validateOutput = value;
+                return this;
+            }
+
+            public Builder sandbox(ToolSandbox sandbox) {
+                this.sandbox = sandbox;
+                return this;
+            }
+
+            public Builder permission(ToolPermission permission) {
+                this.permissions.add(permission);
+                return this;
+            }
+
+            public Builder permissions(Collection<ToolPermission> permissions) {
+                this.permissions.addAll(permissions);
+                return this;
+            }
+
+            public ToolExecutor build() {
+                return new ToolExecutor(
+                        tools,
+                        strictInputValidation,
+                        validateOutput,
+                        permissions,
+                        sandbox
+                );
+            }
         }
 }
