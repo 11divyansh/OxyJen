@@ -58,17 +58,27 @@ public final class ToolExecutor {
     private final List<ToolPermission> permissions;
     private final ToolSandbox sandbox;
     
+    
+    public static ToolExecutor of(Collection<Tool> tools) {
+        return new ToolExecutor(tools);
+    }
+    public static ToolExecutor of(Collection<Tool> tools, ToolSandbox sandbox) {
+        return new ToolExecutor(tools, sandbox);
+    }
+    public static ToolExecutor of(Collection<Tool> tools, ToolSandbox sandbox, ToolPermission... permissions) {
+        return new ToolExecutor(tools, sandbox, permissions);
+    }
     /**
      * Create executor with default settings.
      * @param tools List of available tools
      */
-    public ToolExecutor(Collection<Tool> tools) {
+    private ToolExecutor(Collection<Tool> tools) {
         this(tools, true, true, List.of(), ToolSandbox.basic());
     }
-    public ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox) {
+    private ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox) {
         this(tools, true, true, List.of(), sandbox);
     }
-    public ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox, ToolPermission... permissions) {
+    private ToolExecutor(Collection<Tool> tools, ToolSandbox sandbox, ToolPermission... permissions) {
         this(tools, true, true, 
         		permissions == null ? List.of():List.of(permissions), sandbox);
     }
