@@ -69,7 +69,7 @@ public final class ToolNode implements NodePlugin<ToolCall, ToolResult> {
 	}
 	public ToolNode(String name, Collection<Tool> tools) {
 		this.nodeName = Objects.requireNonNull(name, "Node name cannot be null");
-		this.executor = new ToolExecutor(
+		this.executor = ToolExecutor.of(
 				Objects.requireNonNull(tools, "Tools cannot be null"));
 		this.displayName = buildDisplayName();
 	}

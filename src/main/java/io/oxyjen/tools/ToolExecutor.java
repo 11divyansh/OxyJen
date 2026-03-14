@@ -56,8 +56,7 @@ public final class ToolExecutor {
     private final ToolValidator inputValidator;
     private final boolean validateOutput;
     private final List<ToolPermission> permissions;
-    private final ToolSandbox sandbox;
-    
+    private final ToolSandbox sandbox;   
     
     public static ToolExecutor of(Collection<Tool> tools) {
         return new ToolExecutor(tools);

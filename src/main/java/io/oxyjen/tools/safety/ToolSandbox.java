@@ -1,5 +1,6 @@
 package io.oxyjen.tools.safety;
 
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
@@ -143,7 +144,7 @@ public final class ToolSandbox {
             throw new SecurityException("Path cannot be null or empty");
         }       
         try {
-            Path normalized = Paths.get(path).toAbsolutePath().normalize();
+            Path normalized = Paths.get(path).toRealPath(LinkOption.NOFOLLOW_LINKS);
             String normalizedStr = normalized.toString();            
             if (!isPathAllowed(normalizedStr)) {
                 throw new SecurityException(
