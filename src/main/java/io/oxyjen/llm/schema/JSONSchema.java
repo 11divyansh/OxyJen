@@ -276,6 +276,12 @@ public final class JSONSchema {
                 .nestedSchema(nestedSchema)
                 .build();
         }
+        public static Builder map(String description, PropertySchema valueType) {
+            return new Builder()
+                .type(SchemaType.OBJECT)
+                .description(description)
+                .additionalProperties(valueType);
+        }
         
         private PropertySchema(Builder b) {
             this.type = b.type;

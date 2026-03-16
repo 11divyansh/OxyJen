@@ -211,4 +211,46 @@ public class SchemaTest {
 	    out.println(result);
 	    assertEquals("Bob", result.name());
 	}
+	
+	@Test
+	void httpToolSchemaTest() {
+		log("Http tool schema test");
+		JSONSchema schemaI = JSONSchema.object()
+			        .property("method",
+			            PropertySchema.enumOf(
+			                "HTTP method",
+			                "GET", "POST", "PUT", "DELETE", "PATCH"
+			            ).build())
+			        .property("url",
+			            PropertySchema.string("Full URL to request").build())
+			        .property("headers",
+			            PropertySchema.map(
+			                "Optional HTTP headers",
+			                PropertySchema.string("header value").build()
+			            ).build())
+			        .property("query",
+			                PropertySchema.map(
+			                    "Query parameters",
+			                    PropertySchema.string("parameter value").build()
+			                ).build())
+			        .property("body",
+			            PropertySchema.string("Optional request body").build())
+			        .required("method", "url")
+			        .build();
+		JSONSchema schemaO = JSONSchema.object()
+		        .property("status",
+			            PropertySchema.number("HTTP status code").minimum(100)
+			            .maximum(599).build())
+			        .property("headers",
+			            PropertySchema.map(
+			                "Response headers",
+			                PropertySchema.string("header value").build()
+			            ).build())
+			        .property("body",
+			            PropertySchema.string("Response body").build())
+			        .required("status")
+			        .build();
+		out.println(schemaI.toJSON());
+		out.println(schemaO.toJSON());
+	}
 }
