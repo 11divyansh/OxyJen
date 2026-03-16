@@ -4,6 +4,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -38,7 +39,8 @@ public final class ToolSandbox {
     private ToolSandbox(Builder builder) {
         this.allowedDirectories = Set.copyOf(builder.allowedDirectories);
         this.timeoutMs = builder.timeoutMs;
-        this.executor = Executors.newCachedThreadPool(r -> {
+        int poolSize = Math.max(2, Runtime.getRuntime().availableProcessors());
+        this.executor = Executors.newFixedThreadPool(poolSize, r -> {
             Thread t = new Thread(r, "ToolSandbox-Worker");
             t.setDaemon(true);
             return t;
@@ -65,7 +67,13 @@ public final class ToolSandbox {
         if (timeoutMs <= 0) {
             return executeWithoutTimeout(operation);
         }
-        Future<ToolResult> future = executor.submit(operation::get);
+        Future<ToolResult> future = executor.submit(() -> {
+        	try {
+        		return operation.get();
+        	} catch (Throwable t) {
+        		throw new RuntimeException(t);
+        	}
+        });
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS); 
         } catch (TimeoutException e) {
@@ -79,6 +87,8 @@ public final class ToolSandbox {
             return ToolResult.failure("sandbox", "Execution interrupted");      
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re && re.getCause() != null)
+            	cause = re.getCause();
             return ToolResult.failure(
                 "sandbox",
                 "Execution failed: " + cause.getMessage()
