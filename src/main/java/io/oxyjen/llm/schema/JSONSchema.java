@@ -276,11 +276,11 @@ public final class JSONSchema {
                 .nestedSchema(nestedSchema)
                 .build();
         }
-        public static Builder map(String description, PropertySchema valueType) {
+        public static Builder map(String description, PropertySchema.Builder valueType) {
             return new Builder()
                 .type(SchemaType.OBJECT)
                 .description(description)
-                .additionalProperties(valueType);
+                .additionalProperties(valueType.build());
         }
         
         private PropertySchema(Builder b) {

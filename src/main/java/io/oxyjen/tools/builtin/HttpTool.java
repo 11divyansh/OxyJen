@@ -55,12 +55,12 @@ public final class HttpTool implements Tool{
 			        .property("headers",
 			            PropertySchema.map(
 			                "Optional HTTP headers",
-			                PropertySchema.string("header value").build()
+			                PropertySchema.string("header value")
 			            ).build())
 			        .property("query",
 			                PropertySchema.map(
 			                    "Query parameters",
-			                    PropertySchema.string("parameter value").build()
+			                    PropertySchema.string("parameter value")
 			            ).build())
 			        .property("body",
 			            PropertySchema.string("Optional request body").build())
@@ -78,7 +78,7 @@ public final class HttpTool implements Tool{
 		        .property("headers",
 		            PropertySchema.map(
 		                "Response headers",
-		                PropertySchema.string("header value").build()
+		                PropertySchema.string("header value")
 		            ).build())
 		        .property("body",
 		            PropertySchema.string("Response body").build())
