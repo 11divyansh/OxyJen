@@ -46,6 +46,14 @@ public final class ToolResult {
             .output(output)
             .build();
     }
+    public static ToolResult success(String toolName, Object output, long ms) {
+    	return new Builder()
+    			.toolName(toolName)
+    			.success(true)
+    			.output(output)
+    			.executionTimeMs(ms)
+    			.build();
+    }
     
     public static ToolResult failure(String toolName, String error) {
         return new Builder()
