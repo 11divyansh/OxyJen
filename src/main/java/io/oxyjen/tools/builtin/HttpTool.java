@@ -196,17 +196,36 @@ public final class HttpTool implements Tool{
                 responseBody = responseBody.substring(0, maxResponseSize) +
                     "\n[TRUNCATED - exceeded " + maxResponseSize + " bytes]";
             }
-            Map<String, Object> result = new HashMap<>();
-            result.put("status", response.statusCode());
-            
+            int status = response.statusCode();
+            boolean isSuccess = status >= 200 && status < 300;
+
             Map<String, String> responseHeaders = new HashMap<>();
             response.headers().map().forEach((key, values) ->
-                responseHeaders.put(key, String.join(", ", values))
+                    responseHeaders.put(key, String.join(", ", values))
             );
-            result.put("headers", responseHeaders);
-            result.put("body", responseBody);  
+
             long end = System.currentTimeMillis();
-            return ToolResult.success(name(), result, end - start);  
+            if (isSuccess) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("status", status);
+                result.put("headers", responseHeaders);
+                result.put("body", responseBody);
+                return ToolResult.success(name(), result, end - start);
+            }
+            Map<String, Object> errorBody = new HashMap<>();
+            errorBody.put("_errorType", "http_error");
+            errorBody.put("status", status);
+            errorBody.put("message", resolveMessage(status));
+
+            return ToolResult.builder()
+                    .toolName(name())
+                    .success(false)
+                    .error("HTTP " + status + " Error")
+                    .executionTimeMs(end - start)
+                    .metadata("status", status)
+                    .metadata("headers", responseHeaders)
+                    .metadata("response", errorBody)
+                    .build();
         } catch (java.net.http.HttpTimeoutException e) {
             throw new ToolExecutionException(name(),
                 "Request timeout after " + timeoutMs + "ms",
@@ -220,6 +239,16 @@ public final class HttpTool implements Tool{
                 "HTTP request failed: " + e.getMessage(),e);
         }
     }
+    private String resolveMessage(int status) {
+	    return switch (status) {
+	        case 400 -> "Bad Request";
+	        case 401 -> "Unauthorized";
+	        case 403 -> "Forbidden";
+	        case 404 -> "Resource not found";
+	        case 500 -> "Internal Server Error";
+	        default -> "HTTP Error";
+	    };
+	}
     private URI buildUriWithQuery(String baseUrl, Map<String, String> query)
             throws URISyntaxException {
         if (query.isEmpty()) {

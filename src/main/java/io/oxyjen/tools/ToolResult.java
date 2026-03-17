@@ -154,6 +154,20 @@ public final class ToolResult {
         }
         return Optional.of((T) value);
     }
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getHttpError() {
+        return (Optional<Map<String, Object>>) (Optional<?>)
+        		getMetadata("response", Map.class);
+    }
+    
+    @SuppressWarnings("unchecked")
+    public Optional<Integer> getHttpStatus() {
+        return getMetadata("status", Integer.class);
+    }
+    public Optional<String> getHttpMessage() {
+        return getHttpError()
+            .map(err -> (String) err.get("message"));
+    }
     
     public String toObservation() {
         if (success) {
