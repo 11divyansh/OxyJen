@@ -77,13 +77,10 @@ public final class LLMChain implements ChatModel {
        for (ChatModel model : models) {
            for (int attempt = 1; attempt <= maxRetries; attempt++) {
                try {
-                   log("Attempt " + attempt + " with " + modelName(model));
-                   
-                   String response = model.chat(input);
-                   
+                   log("Attempt " + attempt + " with " + modelName(model));                
+                   String response = model.chat(input);                 
                    log("Success with " + modelName(model));
-                   return response;
-                   
+                   return response;                  
                } catch (Exception e) {
                    lastException = e;
                    log("Failed: " + e.getMessage());
@@ -93,12 +90,12 @@ public final class LLMChain implements ChatModel {
                        log("Retrying in " + backoffMs + "ms...");
                        sleep(backoffMs);
                    } else {
-                       break; 
+                	   if(!shouldRetry(e)) throw e;
+                	   break; 
                    }
                }
            }
-       }
-       
+       }     
        throw new LLMException(
            "All models failed after retries. Last error: " + 
            (lastException != null ? lastException.getMessage() : "unknown"),

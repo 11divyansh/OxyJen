@@ -50,7 +50,7 @@ public class LLMChainFallbackTest {
 	        log("LLMChain throws LLMException when all models fail");
 
 	        AlwaysFailingModel primary = new AlwaysFailingModel();
-	        AlwaysFailingModel fallback = new AlwaysFailingModel();
+	        AlwaysFailingModel2 fallback = new AlwaysFailingModel2();
 
 	        ChatModel chain = LLMChain.builder()
 	            .primary(primary)
