@@ -22,6 +22,22 @@ import io.oxyjen.tools.Tool;
 import io.oxyjen.tools.ToolExecutionException;
 import io.oxyjen.tools.ToolResult;
 
+/**
+ * HTTP request tool supporting GET, POST, PUT, DELETE, PATCH.
+ * 
+ * Real-world use cases:
+ * - Call REST APIs
+ * - Webhook integration
+ * - Data fetching
+ * - Service communication
+ * 
+ * Security:
+ * - URL allowlist recommended
+ * - Timeout enforced
+ * - Size limits
+ * 
+ * @version 0.4
+ */
 public final class HttpTool implements Tool{
 
 	private final Set<String> allowedDomains;
