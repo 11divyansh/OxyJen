@@ -382,4 +382,16 @@ class FileReaderToolTest {
         assertTrue(result.getError().toLowerCase().contains("not found"));
         assertEquals("file_not_found", result.getMetadata("_errorType", String.class).orElse(null));
     }
+    @Test
+    void testDirectoryPath() {
+    	log("Directory path returns failure");
+        ToolResult result = tool.execute(
+            Map.of("path", tempDir.toString()),
+            context
+        );
+        out.println(result);
+        assertTrue(result.isFailure());
+        assertTrue(result.getError().toLowerCase().contains("not a regular file"));
+    }
+
 }

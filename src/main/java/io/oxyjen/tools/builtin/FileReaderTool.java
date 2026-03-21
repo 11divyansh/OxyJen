@@ -158,8 +158,13 @@ public final class FileReaderTool implements Tool {
             			.build();
             }
             if (!Files.isRegularFile(path)) {
-                throw new ToolExecutionException(name(),
-                    "Path is not a regular file: " + pathStr);
+                return ToolResult.builder()
+                		.success(false)
+                		.toolName(name())
+                		.error("Path is not a regular file: " + pathStr)
+                		.metadata(Map.of("_errorType", "not_regular_file"))
+                		.executionTimeMs(elapsed(start))
+                		.build();
             }
             long size = Files.size(path);
             long lastModified = Files.getLastModifiedTime(path).toMillis();
