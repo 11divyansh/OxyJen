@@ -164,6 +164,7 @@ public final class FileReaderTool implements Tool {
             long size = Files.size(path);
             long lastModified = Files.getLastModifiedTime(path).toMillis();
             String mime = Files.probeContentType(path);
+            if (mime == null) mime = "application/octet-stream";
             if (metadataOnly) {
                 return ToolResult.success(name(), Map.of(
                     "size", size,
@@ -193,14 +194,14 @@ public final class FileReaderTool implements Tool {
                         "hasMore", false
                     ), elapsed(start));
                 }      
-                byte[] slice = Arrays.copyOfRange(bytes, (int) startByte, (int) endByte);            
-                return ToolResult.success(name(), Map.of(
-                    "content", new String(slice, charset),
-                    "hasMore", endByte < bytes.length,
-                    "nextChunk", idx + 1,
-                    "size", size,
-                    "mime", mime
-                ), elapsed(start));
+                byte[] slice = Arrays.copyOfRange(bytes, (int) startByte, (int) endByte); 
+                Map<String, Object> out = new HashMap<>();
+                out.put("content", new String(slice, charset));
+                out.put("hasMore", endByte < bytes.length);
+                out.put("nextChunk", idx + 1);
+                out.put("mime", mime);
+                out.put("size", size);
+                return ToolResult.success(name(), out, elapsed(start));
             }
             int startByte = offset != null ? Math.min(offset.intValue(), bytes.length) : 0;
             int endByte = limit != null
@@ -227,13 +228,13 @@ public final class FileReaderTool implements Tool {
                 content = String.join("\n", sub);
             }           
             long lineCount = content.lines().count();
-            return ToolResult.success(name(), Map.of(
-                "content", content,
-                "size", size,
-                "lines", lineCount,
-                "mime", mime,
-                "lastModified", lastModified
-            ), elapsed(start));
+            Map<String, Object> out = new HashMap<>();
+            out.put("content", content);
+            out.put("size", size);
+            out.put("lines", lineCount);
+            out.put("mime", mime);
+            out.put("lastModified", lastModified);
+            return ToolResult.success(name(), out, elapsed(start));
         } catch (SecurityException e) {
             throw new ToolExecutionException(name(),
                 "Access denied: " + e.getMessage());
