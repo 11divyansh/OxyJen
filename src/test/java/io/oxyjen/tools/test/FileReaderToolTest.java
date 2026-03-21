@@ -393,5 +393,56 @@ class FileReaderToolTest {
         assertTrue(result.isFailure());
         assertTrue(result.getError().toLowerCase().contains("not a regular file"));
     }
+    @Test
+    void testPathOutsideSandbox() throws Exception {
+    	log("Path outside sandbox is denied");
+        Path outsideFile = Files.createTempFile("outside-", ".txt");
+        try {
+            Files.writeString(outsideFile, "forbidden");           
+            ToolResult result = tool.execute(
+                Map.of("path", outsideFile.toString()),
+                context
+            );
+            out.println(result);
+            out.println(result.getError());
+            assertTrue(result.isFailure());
+            assertTrue(result.getError().toLowerCase().contains("denied"));
+        } finally {
+            Files.deleteIfExists(outsideFile);
+        }
+    }
+    @Test
+    void testUnsupportedEncoding() throws Exception {
+    	log("Unsupported encoding returns failure");
+        Path file = tempDir.resolve("test.txt");
+        Files.writeString(file, "test");        
+        ToolResult result = tool.execute(
+            Map.of(
+                "path", file.toString(),
+                "encoding", "INVALID-ENCODING-XYZ"
+            ),
+            context
+        );
+        out.println(result);
+        out.println(result.getError());
+        assertTrue(result.isFailure());
+        assertTrue(result.getError().toLowerCase().contains("encoding"));
+    }
+    
+    @Test
+    void testFileTooLarge() throws Exception {
+    	log("File too large returns failure");
+        // create tool with 1KB limit
+        FileReaderTool smallTool = new FileReaderTool(sandbox, 1024);       
+        Path file = tempDir.resolve("huge.txt");
+        Files.writeString(file, "x".repeat(2000));       
+        ToolResult result = smallTool.execute(
+            Map.of("path", file.toString()),
+            context
+        );
+        out.println(result);
+        assertTrue(result.isFailure());
+        assertTrue(result.getError().toLowerCase().contains("too large"));
+    }
 
 }

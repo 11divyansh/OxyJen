@@ -132,8 +132,7 @@ public final class FileReaderTool implements Tool {
         try {
             charset = Charset.forName(encoding);
         } catch (Exception e) {
-            throw new ToolExecutionException(name(),
-                "Unsupported encoding: " + encoding);
+            return ToolResult.failure(name(), "Unsupported encoding: " + encoding);
         }
         Long offset = getLong(input, "offset");
         Long limit = getLong(input, "limit");
@@ -241,8 +240,11 @@ public final class FileReaderTool implements Tool {
             out.put("lastModified", lastModified);
             return ToolResult.success(name(), out, elapsed(start));
         } catch (SecurityException e) {
-            throw new ToolExecutionException(name(),
-                "Access denied: " + e.getMessage());
+        	return ToolResult.builder()
+        			.toolName(name())
+        			.success(false)
+        			.error("Access denied: " + e.getMessage())
+        			.executionTimeMs(elapsed(start)).build();
         } catch (java.nio.charset.UnsupportedCharsetException e) {
             throw new ToolExecutionException(name(),
                 "Unsupported encoding: " + encoding);
@@ -250,7 +252,7 @@ public final class FileReaderTool implements Tool {
             throw new ToolExecutionException(name(),
                 "Failed to read file: " + e.getMessage(), e);
         } catch (ToolExecutionException e) {
-            throw e;
+        	return ToolResult.failure(name(), e);
         } catch (Exception e) {
             throw new ToolExecutionException(name(),
                 "Unexpected error: " + e.getMessage(), e);
