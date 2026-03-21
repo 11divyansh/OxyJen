@@ -154,7 +154,7 @@ public final class ToolSandbox {
             throw new SecurityException("Path cannot be null or empty");
         }       
         try {
-            Path normalized = Paths.get(path).toRealPath(LinkOption.NOFOLLOW_LINKS);
+        	Path normalized = Paths.get(path).toAbsolutePath().normalize();
             String normalizedStr = normalized.toString();            
             if (!isPathAllowed(normalizedStr)) {
                 throw new SecurityException(

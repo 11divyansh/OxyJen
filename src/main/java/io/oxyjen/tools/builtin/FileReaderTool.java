@@ -149,11 +149,13 @@ public final class FileReaderTool implements Tool {
             String normalizedPath = sandbox.normalizePath(pathStr);
             Path path = Paths.get(normalizedPath);
             if (!Files.exists(path)) {
-            	throw new ToolExecutionException(
-            		    name(),
-            		    "File not found: " + pathStr,
-            		    Map.of("_errorType", "file_not_found", "path", pathStr)
-            		);
+            	return ToolResult.builder()
+            			.success(false)
+            			.toolName(name())
+            			.error("File not found: " + pathStr)
+            			.metadata(Map.of("_errorType", "file_not_found", "path", pathStr))
+            			.executionTimeMs(elapsed(start))
+            			.build();
             }
             if (!Files.isRegularFile(path)) {
                 throw new ToolExecutionException(name(),
@@ -214,7 +216,7 @@ public final class FileReaderTool implements Tool {
             }
             if (lineStart != null || lineEnd != null || maxLines != null) {
                 List<String> lines = content.lines().toList();               
-                int from = lineStart != null ? (int)(lineStart - 1) : 0;
+                int from = lineStart != null ? lineStart.intValue() - 1 : 0;
                 int to = lineEnd != null ? Math.min(lineEnd.intValue(), lines.size()) : lines.size();  
                 from = Math.max(0, Math.min(from, lines.size()));
                 to = Math.max(from, Math.min(to, lines.size()));
