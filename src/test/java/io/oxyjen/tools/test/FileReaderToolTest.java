@@ -444,5 +444,42 @@ class FileReaderToolTest {
         assertTrue(result.isFailure());
         assertTrue(result.getError().toLowerCase().contains("too large"));
     }
-
+    @Test
+    void testIsSafe() {
+        assertTrue(tool.isSafe(
+            Map.of("path", "/valid/path.txt"),
+            context
+        ));        
+        assertFalse(tool.isSafe(
+            Map.of("path", ""),
+            context
+        ));       
+        assertFalse(tool.isSafe(
+            Map.of("path", "x".repeat(5000)),
+            context
+        ));
+    }
+    @Test
+    void testToolMetadata() {
+        assertEquals("file_read", tool.name());
+        assertFalse(tool.description().isEmpty());
+        assertNotNull(tool.inputSchema());
+        assertNotNull(tool.outputSchema());
+        assertEquals(1000L, tool.estimateExecutionTime());
+    }
+    
+    @Test
+    void testExecutionTime() throws Exception {
+    	log("Execution time is tracked");
+        Path file = tempDir.resolve("time.txt");
+        Files.writeString(file, "test");        
+        ToolResult result = tool.execute(
+            Map.of("path", file.toString()),
+            context
+        );
+        out.println(result);
+        out.println(result.getOutput());
+        assertTrue(result.isSuccess());
+        assertTrue(result.getExecutionTimeMs() >= 0);
+    }
 }
