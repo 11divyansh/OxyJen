@@ -1,20 +1,28 @@
 package io.oxyjen.tools.test;
 
+import static java.lang.System.out;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-import static java.lang.System.*;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.tools.ToolCall;
 import io.oxyjen.tools.ToolExecutor;
+import io.oxyjen.tools.ToolNode;
 import io.oxyjen.tools.ToolResult;
 import io.oxyjen.tools.builtin.FileReaderTool;
 import io.oxyjen.tools.safety.AllowListPermission;
@@ -244,5 +252,165 @@ class FileReaderToolIntegrationTest {
         assertTrue(extracted.contains("host=localhost"));
         assertTrue(extracted.contains("port=5432"));
         assertFalse(extracted.contains("[cache]"));
+    }
+    @Test
+    void testScenarioMetadataCheck() throws Exception {
+    	log("Scenario: Check file metadata without reading content");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);        
+        Path file = tempDir.resolve("data.json");
+        String data = "{\"users\": []}";
+        Files.writeString(file, data);       
+        // Get metadata only (fast check)
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", file.toString(),
+            "metadataOnly", true
+        ));       
+        ToolResult result = executor.execute(call, context);        
+        assertTrue(result.isSuccess());        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> output = (Map<String, Object>) result.getOutput();
+        out.println(output);
+        assertFalse(output.containsKey("content"));
+        assertEquals(data.length(), ((Number) output.get("size")).intValue());
+        assertTrue(output.containsKey("lastModified"));
+    }
+    
+    @Test
+    void testScenarioCSVPreview() throws Exception {
+    	log("Scenario: Read CSV file and limit to first 10 rows");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);        
+        // create CSV with 100 rows
+        Path csvFile = tempDir.resolve("data.csv");
+        StringBuilder csv = new StringBuilder("id,name,value\n");
+        for (int i = 1; i <= 100; i++) {
+            csv.append(String.format("%d,Item%d,%d\n", i, i, i * 10));
+        }
+        Files.writeString(csvFile, csv.toString());
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", csvFile.toString(),
+            "maxLines", 10
+        ));        
+        ToolResult result = executor.execute(call, context);        
+        assertTrue(result.isSuccess());        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> output = (Map<String, Object>) result.getOutput();
+        out.println(output);
+        assertEquals(10L, ((Number) output.get("lines")).longValue());
+        String content = (String) output.get("content");
+        assertTrue(content.startsWith("id,name,value"));
+    }
+    
+    @Test
+    void testScenarioBinaryFileRead() throws Exception {
+    	log("Scenario: Binary file read with base64 encoding");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);        
+        // Create binary file (e.g., small image)
+        Path binaryFile = tempDir.resolve("image.bin");
+        byte[] imageData = new byte[100];
+        new Random().nextBytes(imageData);
+        Files.write(binaryFile, imageData);      
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", binaryFile.toString(),
+            "binaryMode", true
+        ));       
+        ToolResult result = executor.execute(call, context);       
+        assertTrue(result.isSuccess());       
+        @SuppressWarnings("unchecked")
+        Map<String, Object> output = (Map<String, Object>) result.getOutput();
+        out.println(output);
+        String base64 = (String) output.get("content");
+        assertNotNull(base64);
+        
+        // verify we can decode it back
+        byte[] decoded = Base64.getDecoder().decode(base64);
+        assertEquals(100, decoded.length);
+    }
+    
+    @Test
+    void testScenarioLogTail() throws Exception {
+    	log("Scenario: Tail of log file (last N lines)");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);       
+        // Create log file with 50 lines
+        Path logFile = tempDir.resolve("app.log");
+        StringBuilder logs = new StringBuilder();
+        for (int i = 1; i <= 50; i++) {
+            logs.append("Log line ").append(i).append("\n");
+        }
+        Files.writeString(logFile, logs.toString());       
+        // Get last 5 lines (lines 46-50)
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", logFile.toString(),
+            "lineStart", 46,
+            "lineEnd", 50
+        ));       
+        ToolResult result = executor.execute(call, context);       
+        assertTrue(result.isSuccess());       
+        @SuppressWarnings("unchecked")
+        Map<String, Object> output = (Map<String, Object>) result.getOutput();
+        out.println(output);
+        String content = (String) output.get("content");
+        assertTrue(content.contains("Log line 46"));
+        assertTrue(content.contains("Log line 50"));
+        assertFalse(content.contains("Log line 45"));
+    }
+    @Test
+    void testScenarioDeletedFile() throws Exception {
+    	log("Scenario: Graceful handling of deleted file");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);       
+        Path file = tempDir.resolve("temporary.txt");
+        Files.writeString(file, "temp");
+        Files.delete(file);        
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", file.toString()
+        ));        
+        ToolResult result = executor.execute(call, context); 
+        out.println(result);
+        assertTrue(result.isFailure());
+        assertTrue(result.getError().toLowerCase().contains("not found"));
+        assertEquals("file_not_found",
+            result.getMetadata("_errorType", String.class).orElse(null));
+    }
+    
+    @Test
+    void testScenarioPathTraversalBlocked() throws Exception {
+    	log("Scenario: Path traversal attempt blocked");
+        ToolExecutor executor = ToolExecutor.of(List.of(tool), sandbox);        
+        // try to read outside sandbox using ../
+        String maliciousPath = tempDir.toString() + "/../../../etc/passwd";        
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", maliciousPath
+        ));        
+        ToolResult result = executor.execute(call, context);
+        out.println(result.getError());
+        assertTrue(result.isFailure());
+        assertTrue(result.getError().toLowerCase().contains("denied") ||
+                   result.getError().toLowerCase().contains("not allowed"));
+    }
+    
+    @Test
+    void testToolNodeIntegration() throws Exception {
+    	log("ToolNode: FileReaderTool works in ToolNode");
+        ToolNode toolNode = new ToolNode("file-tools", tool);       
+        Path file = tempDir.resolve("node-test.txt");
+        Files.writeString(file, "ToolNode test");       
+        ToolCall call = ToolCall.of("file_read", Map.of(
+            "path", file.toString()
+        ));        
+        ToolResult result = toolNode.process(call, context);
+        assertTrue(result.isSuccess());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> output = (Map<String, Object>) result.getOutput();
+        out.println(output);
+        assertEquals("ToolNode test", output.get("content"));
+    }
+    
+    @Test
+    void testToolNodeLifecycle() throws Exception {
+    	log("ToolNode: Lifecycle hooks execute");
+        ToolNode toolNode = new ToolNode(tool);
+        assertDoesNotThrow(() -> toolNode.onStart(context));
+        assertDoesNotThrow(() -> toolNode.onFinish(context));
+        assertDoesNotThrow(() ->
+            toolNode.onError(new Exception("test"), context));
     }
 }
