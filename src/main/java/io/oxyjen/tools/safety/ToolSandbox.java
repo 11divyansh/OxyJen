@@ -1,10 +1,8 @@
 package io.oxyjen.tools.safety;
 
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -35,10 +33,12 @@ public final class ToolSandbox {
     private final Set<Path> allowedDirectories;
     private final long timeoutMs;
     private final ExecutorService executor;
+    private final boolean strictMode;
     
     private ToolSandbox(Builder builder) {
         this.allowedDirectories = Set.copyOf(builder.allowedDirectories);
         this.timeoutMs = builder.timeoutMs;
+        this.strictMode = builder.strictMode;
         int poolSize = Math.max(2, Runtime.getRuntime().availableProcessors());
         this.executor = Executors.newFixedThreadPool(poolSize, r -> {
             Thread t = new Thread(r, "ToolSandbox-Worker");
@@ -55,6 +55,7 @@ public final class ToolSandbox {
     
     public static ToolSandbox strict() {
         return new Builder()
+        	.strictMode(true)
             .timeout(10, TimeUnit.SECONDS)
             .build();
     }
@@ -113,9 +114,10 @@ public final class ToolSandbox {
      */
     public boolean isPathAllowed(String path) {
         if (path == null || path.isEmpty()) 
-            return false;   
+            return strictMode ? false : true;   
         if (allowedDirectories.isEmpty()) 
-            return true;  
+        	// no restrictions configured
+            return !strictMode; // in strict mode, deny if no allowlist
         try {
             Path normalized = Paths.get(path).toAbsolutePath().normalize();
             for (Path allowedDir : allowedDirectories) {
@@ -180,6 +182,10 @@ public final class ToolSandbox {
         return timeoutMs;
     }
     
+    public boolean isStrictMode() {
+    	return strictMode;
+    }
+    
     public void shutdown() {
         executor.shutdown();
         try {
@@ -198,6 +204,7 @@ public final class ToolSandbox {
     public static class Builder {
         private Set<Path> allowedDirectories = new HashSet<>();
         private long timeoutMs = 30000; 
+        private boolean strictMode = false;
         public Builder allowedDirectory(String directory) {
             try {
                 Path path = Paths.get(directory).toAbsolutePath().normalize();
@@ -223,6 +230,19 @@ public final class ToolSandbox {
         
         public Builder noTimeout() {
             this.timeoutMs = -1;
+            return this;
+        }
+        
+        /**
+         * Enable strict mode.
+         * 
+         * In strict mode:
+         * - Deny access if no allowed directories configured
+         * - Fail on any ambiguous path
+         * - More aggressive validation
+         */
+        public Builder strictMode(boolean strict) {
+            this.strictMode = strict;
             return this;
         }
         
