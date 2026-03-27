@@ -5,6 +5,9 @@ package io.oxyjen.core;
  *
  * An edge connects a source node to a target node and can optionally carry
  * a condition that determines whether traversal should happen at runtime.
+ * 
+ * Edge types:
+ * - {@link DirectEdge} – always traversed (default)
  */
 public abstract class Edge {
 	 
