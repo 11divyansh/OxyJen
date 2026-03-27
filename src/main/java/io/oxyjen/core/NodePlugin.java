@@ -44,6 +44,4 @@ public interface NodePlugin<I, O> {
      * Can be overridden.
      */
     default void onError(Exception e, NodeContext context) {}
-    
-    
 }
