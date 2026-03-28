@@ -20,6 +20,11 @@ import io.oxyjen.core.exceptions.ExceptionHandler;
 
 class NodePluginLifecycleTest {
 
+	private void log(String title) {
+        System.out.println("\n==============================");
+        System.out.println(title);
+        System.out.println("==============================");
+    }
     private Executor executor;
 
     @BeforeEach
@@ -35,7 +40,7 @@ class NodePluginLifecycleTest {
         NodeContext ctx = new NodeContext();
         
         Graph graph = new GraphBuilder()
-                .addNode(node)
+                .addNode("node",node)
                 .build();
 
         // If your Executor.run is synchronous: run(node, input, ctx)
@@ -52,7 +57,7 @@ class NodePluginLifecycleTest {
         NodeContext ctx = new NodeContext();
 
         Graph graph = new GraphBuilder()
-                .addNode(node)
+                .addNode("node",node)
                 .build();
         RuntimeException ex = assertThrows(RuntimeException.class, () -> {
             executor.run(graph, "hello", ctx);
@@ -67,7 +72,7 @@ class NodePluginLifecycleTest {
         NodeContext ctx = new NodeContext();   // Context
 
         Graph graph = new GraphBuilder()
-                .addNode(node)
+                .addNode("node",node)
                 .build();
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> {
@@ -104,7 +109,7 @@ class NodePluginLifecycleTest {
         ErrorNode node = new ErrorNode();
 
         Graph graph = new GraphBuilder()
-                .addNode(node)
+                .addNode("node",node)
                 .build();
 
         try {
@@ -123,6 +128,7 @@ class NodePluginLifecycleTest {
     
     @Test
     void testNodeContext_sharesStateBetweenNodes() {
+    	log("Test node context");
         NodeContext ctx = new NodeContext();
 
         // Node 1: writes to context
@@ -156,8 +162,8 @@ class NodePluginLifecycleTest {
 
         // Build graph: writer -> reader
         Graph graph = new GraphBuilder()
-                .addNode(writerNode)
-                .addNode(readerNode)
+                .addNode("writer-node",writerNode)
+                .addNode("reader-node",readerNode)
                 .build();
 
         // Execute
@@ -203,8 +209,8 @@ class NodePluginLifecycleTest {
 
         // Build the graph
         Graph graph = new GraphBuilder()
-                .addNode(startTimeNode)
-                .addNode(endTimeNode)
+                .addNode("start-timeNode",startTimeNode)
+                .addNode("end-timeNode",endTimeNode)
                 .build();
 
         // Execute

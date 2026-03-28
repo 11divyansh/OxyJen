@@ -52,7 +52,7 @@ public class GraphBuilder {
         for (Edge edge : edges) {
         	graph.addEdge(edge);
         }
-        // validation
+        graph.validate();
         return graph;
     }
     private NodePlugin<?, ?> getNode(String name){

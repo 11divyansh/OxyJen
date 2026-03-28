@@ -132,5 +132,21 @@ public class Graph {
         if (nodes.isEmpty()) {
             throw new IllegalStateException("Graph [" + name + "] contains no nodes");
         }
+        for (Edge edge : getAllEdges()) {
+            if (!nodes.contains(edge.getSource())) {
+                throw new IllegalStateException(
+                    "Edge source [" + edge.getSource().getName() + "] is not registered in graph [" + name + "]"
+                );
+            }
+            if (!nodes.contains(edge.getTarget())) {
+                throw new IllegalStateException(
+                    "Edge target [" + edge.getTarget().getName() + "] is not registered in graph [" + name + "]"
+                );
+            }
+        }
+    }
+    @Override
+    public String toString() {
+        return "Graph[" + name + ", nodes=" + nodes.size() + ", edges=" + getAllEdges().size() + "]";
     }
 }

@@ -209,7 +209,7 @@ public class SchemaNodeTests {
 	            .schema(schema)
 	            .build();
 	    Graph graph = GraphBuilder.named("test")
-	        .addNode(node)
+	        .addNode("node",node)
 	        .build();
 	    Executor executor = new Executor();
 	    Object result = executor.run(graph,"input",new NodeContext());
