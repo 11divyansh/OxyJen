@@ -321,7 +321,7 @@ class FormatterNode implements NodePlugin<String, String> {
 <dependency>
   <groupId>com.github.11divyansh</groupId>
   <artifactId>Oxyjen</artifactId>
-  <version>v0.3.0</version>
+  <version>v0.4.0</version>
 </dependency>
 ```
 
@@ -332,7 +332,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:Oxyjen:v0.3.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.4.0'
 }
 ```
 
