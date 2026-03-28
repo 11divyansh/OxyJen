@@ -348,6 +348,7 @@ After installation, verify by importing:
 ```java
 import io.oxyjen.core.*;
 import io.oxyjen.llm.*;
+import io.oxyjen.tools.*;
 ```
 ---
 
