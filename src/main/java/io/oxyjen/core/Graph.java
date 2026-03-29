@@ -36,14 +36,16 @@ public class Graph {
     private final String name;
     private final LinkedHashSet<NodePlugin<?, ?>> nodes = new LinkedHashSet<>();
     private final Map<NodePlugin<?, ?>, List<Edge>> adjacency = new LinkedHashMap<>();
-    public Graph() {
-        this("unnamed-graph");
-    }
 
-    public Graph(String name) {
+    Graph(String name) {
         this.name = Objects.requireNonNull(name);
     }
-
+    /**
+     * Usage : Graph.builder(name).addNode(...).
+     */
+    public static GraphBuilder builder(String name) {
+        return GraphBuilder.named(name);
+    }
     /**
      * Add a node to the end of the pipeline.
      */

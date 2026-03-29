@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
 
 /**
  * Builder pattern for constructing {@link Graph} instances.
@@ -43,6 +45,26 @@ public class GraphBuilder {
         edges.add(new DirectEdge(source, target));
         return this;
     }
+    /**
+     * Connection with conditional logic
+     */
+    public <O> GraphBuilder connectConditional(
+            String from,
+            String to,
+            BiPredicate<O, NodeContext> predicate
+    ) {
+        NodePlugin<?, ?> source = getNode(from);
+        NodePlugin<?, ?> target = getNode(to);
+        edges.add(new ConditionalEdge<>(source, target, predicate));
+        return this;
+    }
+    public RouteBuilder route(
+            String from,
+            Function<NodeContext, String> router
+    ) {
+        NodePlugin<?, ?> source = getNode(from);
+        return new RouteBuilder(this, source, router);
+    }
 
     public Graph build() {
         Graph graph = new Graph(name);
@@ -61,5 +83,27 @@ public class GraphBuilder {
     		throw new IllegalArgumentException("Node not found: " + name);
     	}
     	return node;
+    }
+    public static class RouteBuilder {
+        private final GraphBuilder builder;
+        private final NodePlugin<?, ?> source;
+        private final Function<NodeContext, String> router;
+        RouteBuilder(GraphBuilder builder,
+                     NodePlugin<?, ?> source,
+                     Function<NodeContext, String> router) {
+            this.builder = builder;
+            this.source = source;
+            this.router = router;
+        }
+        public RouteBuilder to(String key, String targetName) {
+            NodePlugin<?, ?> target = builder.getNode(targetName);
+
+            builder.edges.add(new ConditionalEdge<>(
+                source,
+                target,
+                (out, ctx) -> key.equals(router.apply(ctx))
+            ));
+            return this;
+        }
     }
 }

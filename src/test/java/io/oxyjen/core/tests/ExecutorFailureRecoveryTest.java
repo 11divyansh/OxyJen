@@ -19,13 +19,13 @@ class ExecutorFailureRecoveryTest {
 
     @Test
     void testFailureRecoveryStopsPipeline() {
-        Graph graph = new Graph("failure-graph");
         NodeContext context = new NodeContext();
         Executor executor = new Executor();
-
-        graph.addNode(new NodeA());
-        graph.addNode(new ErrorNode());
-        graph.addNode(new NodeC()); // MUST NOT RUN
+        Graph graph = Graph.builder("failure-graph")
+        .addNode("Node A",new NodeA())
+        .addNode("Error node",new ErrorNode())
+        .addNode("Node C",new NodeC()) // MUST NOT RUN
+        .build();
 
         RuntimeException ex = assertThrows(RuntimeException.class, () ->
                 executor.run(graph, "input", context)
@@ -34,10 +34,6 @@ class ExecutorFailureRecoveryTest {
         // Validate meaningful error
         assertTrue(ex.getMessage().contains("ErrorNode"));
     }
-
-    // -------------------------
-    // Test Nodes
-    // -------------------------
 
     static class NodeA implements NodePlugin<String, String> {
         @Override
@@ -78,8 +74,6 @@ class ExecutorFailureRecoveryTest {
     
     @Test
     void testOnErrorCalledAndOnFinishNotCalledOnFailure() {
-        // Arrange
-        Graph graph = new Graph("error-graph");
         NodeContext context = new NodeContext();
         Executor executor = new Executor();
 
@@ -95,7 +89,6 @@ class ExecutorFailureRecoveryTest {
 
             @Override
             public void onStart(NodeContext context) {
-                // no-op
             }
 
             @Override
@@ -113,16 +106,13 @@ class ExecutorFailureRecoveryTest {
                 onErrorCalled.set(true);
             }
         };
+        Graph newGraph = Graph.builder("error-graph")
+        .addNode("failingNode", failingNode).build();
 
-        graph.addNode(failingNode);
-
-        // Act
         RuntimeException ex = assertThrows(
             RuntimeException.class,
-            () -> executor.run(graph, "input", context)
+            () -> executor.run(newGraph, "input", context)
         );
-
-        // Assert
         assertEquals("Node failed: FailingNode", ex.getMessage());
         assertTrue(onErrorCalled.get(), "onError should be called on failure");
         assertFalse(onFinishCalled.get(), "onFinish should NOT be called on failure");

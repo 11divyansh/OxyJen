@@ -237,18 +237,13 @@ class NodePluginLifecycleTest {
     
     @Test
     void testEmptyGraph_throwsIllegalStateException() {
-        // Arrange
-        Graph graph = new Graph(); // unnamed-graph, no nodes
         Executor executor = new Executor();
         NodeContext context = new NodeContext();
 
-        // Act + Assert
         IllegalStateException ex = assertThrows(
             IllegalStateException.class,
-            () -> executor.run(graph, "input", context)
+            () -> Graph.builder("unnamed-graph").build() // graph with no nodes
         );
-
-        // Verify message
         assertEquals(
             "Graph [unnamed-graph] contains no nodes",
             ex.getMessage()
@@ -303,10 +298,10 @@ class NodePluginLifecycleTest {
             }
         };
 
-        Graph graph = new Graph("order-test-graph")
-                .addNode(nodeA)
-                .addNode(nodeB)
-                .addNode(nodeC);
+        Graph graph = Graph.builder("order-test-graph")
+                .addNode("Node A",nodeA)
+                .addNode("Node B",nodeB)
+                .addNode("Node C",nodeC).build();
 
         // Act
         String result = executor.run(graph, "", context);
@@ -358,8 +353,8 @@ class NodePluginLifecycleTest {
             }
         };
 
-        Graph graph = new Graph("lifecycle-test-graph")
-                .addNode(lifecycleNode);
+        Graph graph = Graph.builder("lifecycle-test-graph")
+                .addNode("Lifecycle node",lifecycleNode).build();
 
         // Act
         String result = executor.run(graph, "", context);
@@ -410,16 +405,12 @@ class NodePluginLifecycleTest {
             }
         };
 
-        Graph graph = new Graph("type-propagation-graph")
-                .addNode(stringToIntNode)
-                .addNode(intToStringNode);
+        Graph graph = Graph.builder("type-propagation-graph")
+                .addNode("StringToIntNode",stringToIntNode)
+                .addNode("IntToStringNode",intToStringNode).build();
 
-        // Act
         String result = executor.run(graph, "HELLO", context);
 
-        // Assert
         assertEquals("Length is: 5", result);
     }
-
-
 }
