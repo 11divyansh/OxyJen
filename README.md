@@ -277,7 +277,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - Focus on **performance, security, and observability**.
 - I'm building this to learn java in a much deeper way.
 
-### **Phase 4 in progress**
+### **Phase 5 in progress**
 - **RAG support** - Vector databases, embeddings, document loaders
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
@@ -285,7 +285,6 @@ class FormatterNode implements NodePlugin<String, String> {
 - **Async execution** - Run nodes in parallel
 - **DAG support** - Complex branching workflows
 - **Conditional routing** - "If X, then run node Y"
-- **Retry logic** - Automatic retries with backoff
 - **Circuit breakers** - Fail fast when services are down
 - **Streaming responses**
 - **Token counting & cost tracking**
@@ -322,7 +321,7 @@ class FormatterNode implements NodePlugin<String, String> {
 <dependency>
   <groupId>com.github.11divyansh</groupId>
   <artifactId>Oxyjen</artifactId>
-  <version>v0.3.0</version>
+  <version>v0.4.0</version>
 </dependency>
 ```
 
@@ -333,7 +332,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'com.github.11divyansh:Oxyjen:v0.3.0'
+  implementation 'com.github.11divyansh:Oxyjen:v0.4.0'
 }
 ```
 
@@ -349,6 +348,7 @@ After installation, verify by importing:
 ```java
 import io.oxyjen.core.*;
 import io.oxyjen.llm.*;
+import io.oxyjen.tools.*;
 ```
 ---
 
