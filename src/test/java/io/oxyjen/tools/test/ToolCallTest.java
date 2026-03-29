@@ -1,6 +1,6 @@
 package io.oxyjen.tools.test;
 
-import static java.lang.System.*;
+import static java.lang.System.out;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -10,10 +10,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
 import io.oxyjen.tools.ToolCall;
+import io.oxyjen.tools.builtin.file_read.FileReadRequest;
 
 class ToolCallTest {
     
@@ -41,7 +43,7 @@ class ToolCallTest {
             .argument("query", "Java frameworks")
             .argument("limit", 10)
             .build();
-        out.println(call);
+        out.println(call.getArguments());
         assertEquals("web_search", call.getName());
         assertTrue(call.hasArgument("query"));
         assertTrue(call.hasArgument("limit"));
@@ -109,5 +111,23 @@ class ToolCallTest {
         assertTrue(str.contains("test"));
         assertTrue(str.contains("a"));
         assertTrue(str.contains("b"));
+    }
+    @Test
+    void testMinimalRequest_onlyPathRequired() {
+        ToolCall toolCall = ToolCall.builder()
+                .name("file_read")
+                .argument("path", "/tmp/file.txt")
+                .build();
+        FileReadRequest req = toolCall.getInputAs(FileReadRequest.class);
+        out.println(req);
+        assertEquals("/tmp/file.txt", req.path());
+        assertNull(req.encoding());
+        assertEquals(Optional.empty(), req.offset());
+        assertEquals(Optional.empty(), req.limit());
+        assertEquals(Optional.empty(), req.lineStart());
+        assertEquals(Optional.empty(), req.lineEnd());
+        assertEquals(Optional.empty(), req.metadataOnly());
+        assertEquals(Optional.empty(), req.binaryMode());
+        assertEquals(Optional.empty(), req.maxLines());
     }
 }

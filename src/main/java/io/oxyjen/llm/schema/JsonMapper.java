@@ -54,6 +54,12 @@ public final class JsonMapper {
         Object parsed = JsonParser.parse(json);
         return convert(parsed, targetClass, targetClass);
     }
+    /**
+     * Deserialize object to typed object
+     */
+    public static <T> T fromJsonTree(Object jsonTree, Class<T> targetClass) {
+        return convert(jsonTree, targetClass, targetClass);
+    }
     @SuppressWarnings("unchecked")
     private static <T> T convert(Object value, Class<T> targetType, Type genericType) {
     	if (Optional.class.isAssignableFrom(targetType)) 

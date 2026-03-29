@@ -24,7 +24,7 @@ import io.oxyjen.tools.ToolCall;
 import io.oxyjen.tools.ToolExecutor;
 import io.oxyjen.tools.ToolNode;
 import io.oxyjen.tools.ToolResult;
-import io.oxyjen.tools.builtin.FileReaderTool;
+import io.oxyjen.tools.builtin.file_read.FileReaderTool;
 import io.oxyjen.tools.safety.AllowListPermission;
 import io.oxyjen.tools.safety.ToolSandbox;
 

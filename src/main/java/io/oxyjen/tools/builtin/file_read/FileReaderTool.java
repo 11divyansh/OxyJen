@@ -1,4 +1,4 @@
-package io.oxyjen.tools.builtin;
+package io.oxyjen.tools.builtin.file_read;
 
 import java.nio.charset.Charset;
 import java.nio.file.Files;

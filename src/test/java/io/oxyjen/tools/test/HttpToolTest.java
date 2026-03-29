@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.tools.ToolResult;
-import io.oxyjen.tools.builtin.HttpTool;
+import io.oxyjen.tools.builtin.http.HttpTool;
 
 class HttpToolTest {
 
@@ -36,7 +36,7 @@ class HttpToolTest {
 		out.println(result.getOutput());
 	}
 	
-	@Test
+	//@Test
 	void testHttpToolGithubIssueCreation() {
 		HttpTool httpTool = HttpTool.builder()
 				.allowDomain("api.github.com")

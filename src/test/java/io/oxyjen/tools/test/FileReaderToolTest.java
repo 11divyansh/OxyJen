@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.tools.ToolResult;
-import io.oxyjen.tools.builtin.FileReaderTool;
+import io.oxyjen.tools.builtin.file_read.FileReaderTool;
 import io.oxyjen.tools.safety.ToolSandbox;
 
 class FileReaderToolTest {

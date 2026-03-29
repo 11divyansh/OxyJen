@@ -2,8 +2,11 @@ package io.oxyjen.tools;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
+import io.oxyjen.llm.schema.JsonMapper;
 import io.oxyjen.llm.schema.JsonParser;
+import io.oxyjen.llm.schema.JsonSerializer;
 
 /**
  * Represents an LLM's request to call a tool.
@@ -88,6 +91,20 @@ public final class ToolCall {
             );
         }
         return (T) value;
+    }
+    /**
+     * Get arguments as Records or Classes instead of Map.
+     */
+    public <T> T getInputAs(Class<T> targetClass) {
+        Object tree = JsonSerializer.toJsonTree(arguments);
+        return JsonMapper.fromJsonTree(tree, targetClass);
+    }
+    public <T> Optional<T> getInputSafe(Class<T> type) {
+        try {
+            return Optional.of(getInputAs(type));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
     
     public boolean hasArgument(String key) {

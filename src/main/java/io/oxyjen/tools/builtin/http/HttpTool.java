@@ -1,4 +1,4 @@
-package io.oxyjen.tools.builtin;
+package io.oxyjen.tools.builtin.http;
 
 import java.net.URI;
 import java.net.URISyntaxException;
