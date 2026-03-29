@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /**
   * A directed acyclic graph (DAG) of {@link NodePlugin} nodes connected by {@link Edge}s.
@@ -38,10 +39,20 @@ public class Graph {
     private final Map<NodePlugin<?, ?>, List<Edge>> adjacency = new LinkedHashMap<>();
 
     Graph(String name) {
-        this.name = Objects.requireNonNull(name);
+    	this.name = (name == null || name.isBlank())
+                ? "graph-" + UUID.randomUUID()
+                : name;
     }
     /**
-     * Usage : Graph.builder(name).addNode(...).
+     * Create unnamed graph for quick testing
+     * Usage : Graph.builder().addNode(...).build();
+     * @return
+     */
+    public static GraphBuilder builder() {
+        return new GraphBuilder();
+    }
+    /**
+     * Usage : Graph.builder(name).addNode(...).build();
      */
     public static GraphBuilder builder(String name) {
         return GraphBuilder.named(name);

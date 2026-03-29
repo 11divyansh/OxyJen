@@ -14,7 +14,7 @@ import java.util.function.Function;
  */
 public class GraphBuilder {
 
-    private String name = "unnamed-graph";
+    private String name;
     Map<String, NodePlugin<?, ?>> nodes = new LinkedHashMap<>();
     private final List<Edge> edges = new ArrayList<>();
 
