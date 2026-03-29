@@ -7,7 +7,8 @@ package io.oxyjen.core;
  * a condition that determines whether traversal should happen at runtime.
  * 
  * Edge types:
- * - {@link DirectEdge} – always traversed (default)
+ * - {@link DirectEdge}      – always traversed (default)
+ * - {@link ConditionalEdge} – traversed only when predicate returns true
  */
 public abstract class Edge {
 	 
