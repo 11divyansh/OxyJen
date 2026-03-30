@@ -18,6 +18,7 @@ import io.oxyjen.graph.edges.DirectEdge;
 public class GraphBuilder {
 
     private String name;
+    private boolean allowCycles = false;
     Map<String, NodePlugin<?, ?>> nodes = new LinkedHashMap<>();
     private final List<Edge> edges = new ArrayList<>();
 
@@ -68,9 +69,14 @@ public class GraphBuilder {
         NodePlugin<?, ?> source = getNode(from);
         return new RouteBuilder(this, source, router);
     }
+    /** To explicitly allow cycles, and restrain user from creating infinite loop*/
+    public GraphBuilder allowCycles() {
+        this.allowCycles = true;
+        return this;
+    }
 
     public Graph build() {
-        Graph graph = new Graph(name);
+        Graph graph = new Graph(name, allowCycles);
         for (NodePlugin<?, ?> node : nodes.values()) {
             graph.addNode(node);
         }

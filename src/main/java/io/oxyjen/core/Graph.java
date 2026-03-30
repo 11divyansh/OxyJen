@@ -44,13 +44,15 @@ import io.oxyjen.graph.edges.DirectEdge;
 public class Graph {
 
     private final String name;
+    private final boolean allowCycles;
     private final LinkedHashSet<NodePlugin<?, ?>> nodes = new LinkedHashSet<>();
     private final Map<NodePlugin<?, ?>, List<Edge>> adjacency = new LinkedHashMap<>();
 
-    Graph(String name) {
+    Graph(String name, boolean allowCycles) {
     	this.name = (name == null || name.isBlank())
                 ? "graph-" + UUID.randomUUID()
                 : name;
+    	this.allowCycles = allowCycles;
     }
     /**
      * Create unnamed graph for quick testing
@@ -186,6 +188,12 @@ public class Graph {
             if (!nodes.contains(edge.getTarget())) {
                 throw new IllegalStateException(
                     "Edge target [" + edge.getTarget().getName() + "] is not registered in graph [" + name + "]"
+                );
+            }
+            if (!allowCycles && edge instanceof CyclicEdge) {
+                throw new IllegalStateException(
+                    "Graph [" + name + "] contains cyclic edges but cycles are not enabled. " +
+                    "Call .allowCycles() on GraphBuilder."
                 );
             }
         }
