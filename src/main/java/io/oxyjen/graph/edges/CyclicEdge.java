@@ -1,6 +1,10 @@
-package io.oxyjen.core;
+package io.oxyjen.graph.edges;
 
 import java.util.function.BiPredicate;
+
+import io.oxyjen.core.Edge;
+import io.oxyjen.core.NodeContext;
+import io.oxyjen.core.NodePlugin;
 
 /**
  * A cyclic edge that routes execution back to a previous node (creating a loop).

@@ -1,6 +1,10 @@
-package io.oxyjen.core;
+package io.oxyjen.graph.edges;
 
 import java.util.function.BiPredicate;
+
+import io.oxyjen.core.Edge;
+import io.oxyjen.core.NodeContext;
+import io.oxyjen.core.NodePlugin;
 
 /**
  * A conditional directed edge that is only traversed when a predicate returns {@code true}.
@@ -34,7 +38,7 @@ public class ConditionalEdge<O> extends Edge{
      * @param predicate Receives the source node's output and the shared context.
      *                  Return {@code true} to traverse this edge.
      */
-	protected ConditionalEdge(NodePlugin<?, ?> source, 
+	public ConditionalEdge(NodePlugin<?, ?> source, 
 			NodePlugin<?, ?> target, 
 			BiPredicate<O, NodeContext> predicate) {
 		super(source, target);

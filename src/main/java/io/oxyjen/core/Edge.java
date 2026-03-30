@@ -1,5 +1,9 @@
 package io.oxyjen.core;
 
+import io.oxyjen.graph.edges.ConditionalEdge;
+import io.oxyjen.graph.edges.CyclicEdge;
+import io.oxyjen.graph.edges.DirectEdge;
+
 /**
  * Represents a directed edge between two nodes in the DAG.
  *

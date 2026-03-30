@@ -1,4 +1,8 @@
-package io.oxyjen.core;
+package io.oxyjen.graph.edges;
+
+import io.oxyjen.core.Edge;
+import io.oxyjen.core.Graph;
+import io.oxyjen.core.NodePlugin;
 
 /**
  * A simple unconditional directed edge.

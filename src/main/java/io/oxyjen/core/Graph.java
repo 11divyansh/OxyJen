@@ -11,6 +11,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import io.oxyjen.graph.edges.CyclicEdge;
+import io.oxyjen.graph.edges.DirectEdge;
+
 /**
   * A directed acyclic graph (DAG) of {@link NodePlugin} nodes connected by {@link Edge}s.
  *

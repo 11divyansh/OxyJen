@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
+import io.oxyjen.graph.edges.ConditionalEdge;
+import io.oxyjen.graph.edges.DirectEdge;
+
 /**
  * Builder pattern for constructing {@link Graph} instances.
  * Simplifies adding nodes and ensures clean creation flow.
