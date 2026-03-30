@@ -9,6 +9,7 @@ package io.oxyjen.core;
  * Edge types:
  * - {@link DirectEdge}      – always traversed (default)
  * - {@link ConditionalEdge} – traversed only when predicate returns true
+ * - {@link CyclicEdge}      – loops back to a previous node (subject to cycle limit)
  */
 public abstract class Edge {
 	 
@@ -40,6 +41,7 @@ public abstract class Edge {
      * Determines if this edge should be traversed given the current output and context.
      *
      * Default implementation always returns true (unconditional edge).
+     * Override in {@link ConditionalEdge} and {@link CyclicEdge} to add routing logic.
      *
      * @param output  The output produced by the source node.
      * @param context The shared execution context.

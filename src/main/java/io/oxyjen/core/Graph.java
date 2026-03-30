@@ -2,6 +2,7 @@ package io.oxyjen.core;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.UUID;
  * - A node with no incoming edges is a "root" (entry point).
  * - A node with no outgoing edges is a "terminal" (exit point).
  * - Multiple roots = fan-in start. Multiple edges from one node = fan-out / branching.
+ * - {@link CyclicEdge}s are the only permitted backward edges (controlled loops).
  * 
  * Usage:
  * <pre>{@code
@@ -30,6 +32,10 @@ import java.util.UUID;
  *   graph.addNode(translateNode);
  *
  *   graph.addEdge(fetchNode, enrichNode); // direct
+ *   graph.addEdge(new ConditionalEdge<>(enrichNode,      		// branch
+ *       summaryNode, (out, ctx) -> ctx.get("lang").equals("en")));
+ *   graph.addEdge(new ConditionalEdge<>(enrichNode,
+ *       translateNode, (out, ctx) -> !ctx.get("lang").equals("en")));
  *   }</pre>
  */
 public class Graph {
@@ -113,6 +119,23 @@ public class Graph {
         adjacency.values().forEach(all::addAll);
         return Collections.unmodifiableList(all);
     }
+    /**
+     * @return Nodes with no incoming edges (graph entry points).
+     */
+    public Set<NodePlugin<?, ?>> getRootNodes() {
+        Set<NodePlugin<?, ?>> hasIncoming = new HashSet<>();
+        for (List<Edge> edges : adjacency.values()) {
+            for (Edge e : edges) {
+                // CyclicEdges don't count as real incoming for root detection
+                if (!(e instanceof CyclicEdge)) {
+                    hasIncoming.add(e.getTarget());
+                }
+            }
+        }
+        Set<NodePlugin<?, ?>> roots = new LinkedHashSet<>(nodes);
+        roots.removeAll(hasIncoming);
+        return Collections.unmodifiableSet(roots);
+    }
     
     /**
      * Returns nodes with no outgoing edges (graph terminal/exit points).
@@ -144,6 +167,12 @@ public class Graph {
     public void validate() {
         if (nodes.isEmpty()) {
             throw new IllegalStateException("Graph [" + name + "] contains no nodes");
+        }
+        if (getRootNodes().isEmpty()) {
+            throw new IllegalStateException(
+                "Graph [" + name + "] has no root nodes - every node has an incoming edge. " +
+                "If you intended a loop, use CyclicEdge and ensure at least one entry point."
+            );
         }
         for (Edge edge : getAllEdges()) {
             if (!nodes.contains(edge.getSource())) {
