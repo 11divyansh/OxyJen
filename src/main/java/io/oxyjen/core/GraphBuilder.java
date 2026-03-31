@@ -9,6 +9,7 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 import io.oxyjen.graph.edges.ConditionalEdge;
+import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
 
 /**
@@ -69,6 +70,18 @@ public class GraphBuilder {
         NodePlugin<?, ?> source = getNode(from);
         return new RouteBuilder(this, source, router);
     }
+    /** To use cyclic edge to loop back to same node.*/
+    public LoopBuilder repeat(String nodeName) {
+        this.allowCycles(); 
+        NodePlugin<?, ?> source = getNode(nodeName);
+        return new LoopBuilder(this, source);
+    }
+    /** To use cyclic edge to loop to different node (previous/some other node).*/
+    public LoopBuilder loop(String from) {
+        this.allowCycles(); 
+        NodePlugin<?, ?> source = getNode(from);
+        return new LoopBuilder(this, source);
+    }
     /** To explicitly allow cycles, and restrain user from creating infinite loop*/
     public GraphBuilder allowCycles() {
         this.allowCycles = true;
@@ -113,6 +126,51 @@ public class GraphBuilder {
                 (out, ctx) -> key.equals(router.apply(ctx))
             ));
             return this;
+        }
+    }
+    public class LoopBuilder {
+
+        private final GraphBuilder builder;
+        private final NodePlugin<?, ?> source;
+        private NodePlugin<?, ?> target;
+        private BiPredicate<Object, NodeContext> condition;
+        private int maxIterations = 3;
+
+        LoopBuilder(GraphBuilder builder, NodePlugin<?, ?> source) {
+            this.builder = builder;
+            this.source = source;
+            this.target = source;
+        }
+        /** Use when looping back to different loop*/
+        public LoopBuilder to(String targetName) {
+            this.target = builder.getNode(targetName);
+            return this;
+        }
+
+        public LoopBuilder whileCondition(BiPredicate<Object, NodeContext> condition) {
+            this.condition = condition;
+            return this;
+        }
+
+        public LoopBuilder max(int max) {
+            this.maxIterations = max;
+            return this;
+        }
+
+        public GraphBuilder build() {
+        	if (condition == null) {
+        		throw new IllegalStateException("Loop condition must be defined");
+        	}
+        	if (maxIterations < 1) {
+        		throw new IllegalArgumentException("maxItegrations must be >= 1");
+        	}
+            builder.edges.add(new CyclicEdge(
+                source,
+                target,
+                condition,
+                maxIterations
+            ));
+            return builder;
         }
     }
 }

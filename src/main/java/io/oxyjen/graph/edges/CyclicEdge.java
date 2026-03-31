@@ -30,11 +30,11 @@ import io.oxyjen.core.NodePlugin;
  *       5));
  * }</pre>
  */
-public final class CyclicEdge<O> extends Edge {
+public final class CyclicEdge extends Edge {
  
     /** Context metadata key prefix for tracking iteration counts. */
     static final String ITERATION_KEY_PREFIX = "__cyclic_edge_iter__";
-    private final BiPredicate<O, NodeContext> predicate;
+    private final BiPredicate<Object, NodeContext> predicate;
     private final int maxIterations;
  
     /**
@@ -45,9 +45,9 @@ public final class CyclicEdge<O> extends Edge {
      *                      When reached, traversal stops regardless of predicate.
      */
     public CyclicEdge(
-            NodePlugin<?, O> source,
+            NodePlugin<?, ?> source,
             NodePlugin<?, ?> target,
-            BiPredicate<O, NodeContext> predicate,
+            BiPredicate<Object, NodeContext> predicate,
             int maxIterations
     ) {
         super(source, target);
@@ -59,9 +59,9 @@ public final class CyclicEdge<O> extends Edge {
  
     /** Constructor with default cap of 3 iterations. */
     public CyclicEdge(
-            NodePlugin<?, O> source,
+            NodePlugin<?, ?> source,
             NodePlugin<?, ?> target,
-            BiPredicate<O, NodeContext> predicate
+            BiPredicate<Object, NodeContext> predicate
     ) {
         this(source, target, predicate, 3);
     }
@@ -70,9 +70,8 @@ public final class CyclicEdge<O> extends Edge {
     @SuppressWarnings("unchecked")
     public boolean shouldTraverse(Object output, NodeContext context) {
         String key = iterationKey();
-        int current = context.<Integer>getMetadata(key) == null
-            ? 0
-            : context.<Integer>getMetadata(key); 
+        Integer currentVal = context.getMetadata(key);
+        int current = currentVal != null ? currentVal : 0;
         if (current >= maxIterations) {
             context.getLogger().warning(
                 "CyclicEdge [" + getLabel() + "] reached max iterations (" + maxIterations + "). Stopping loop."
@@ -81,7 +80,7 @@ public final class CyclicEdge<O> extends Edge {
         } 
         boolean shouldLoop;
         try {
-            shouldLoop = predicate.test((O) output, context);
+            shouldLoop = predicate.test(output, context);
         } catch (ClassCastException e) {
             throw new IllegalStateException(
                 "CyclicEdge [" + getLabel() + "] predicate received unexpected output type: "
