@@ -162,7 +162,7 @@ public class GraphBuilder {
         		throw new IllegalStateException("Loop condition must be defined");
         	}
         	if (maxIterations < 1) {
-        		throw new IllegalArgumentException("maxItegrations must be >= 1");
+        		throw new IllegalArgumentException("maxIterations must be >= 1");
         	}
             builder.edges.add(new CyclicEdge(
                 source,
