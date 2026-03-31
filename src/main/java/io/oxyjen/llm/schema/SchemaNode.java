@@ -20,6 +20,7 @@ public final class SchemaNode<T> implements NodePlugin<String, T> {
     private final String memoryKey;
     private final Class<T> targetType;
     private final SchemaEnforcer enforcer;
+    private final boolean failOnInvalid;
     
     private SchemaNode(Builder<T> builder) {
         this.model = builder.model;
@@ -27,7 +28,8 @@ public final class SchemaNode<T> implements NodePlugin<String, T> {
         this.maxRetries = builder.maxRetries;
         this.memoryKey = builder.memoryKey;
         this.targetType = builder.targetType;
-        this.enforcer = new SchemaEnforcer(model, schema, maxRetries);
+        this.failOnInvalid = builder.failOnInvalid;
+        this.enforcer = new SchemaEnforcer(model, schema, maxRetries, failOnInvalid);
     }
     
     @Override
@@ -35,21 +37,33 @@ public final class SchemaNode<T> implements NodePlugin<String, T> {
         if (memoryKey != null) {
             context.memory(memoryKey).append("user", input);
         } 
-        String jsonOutput = enforcer.execute(input);
+        SchemaResult result = enforcer.execute(input);
         if (memoryKey != null) {
-            context.memory(memoryKey).append("assistant", jsonOutput);
+            context.memory(memoryKey).append("assistant", result.getRawJson());
         }
-        SchemaValidator validator = new SchemaValidator(schema);
-        var result = validator.validate(jsonOutput);
+        // Store schema result in context
+        context.setMetadata("schemaResult", result);
         if (!result.isValid()) {
-            throw new IllegalStateException(
-                "Schema validation failed:\n" + result.formatErrors()
-            );
+        	// store errors for graph-level decisions
+        	context.setMetadata("schemaErrors", result.getErrors());
+            if (failOnInvalid) {
+                throw new IllegalStateException("Schema validation failed: " + result.getErrors());
+            }
+            return null; //soft-fail
         }
-        if (targetType == Map.class) {
-            return targetType.cast(validator.parseToMap(jsonOutput));
+        try {
+            if (targetType == Map.class) {
+                return targetType.cast(JsonParser.parse(result.getRawJson()));
+            } 
+            return JsonMapper.deserialize(result.getRawJson(), targetType);
+        } catch (Exception e) {
+        	// store deserialization error
+        	context.setMetadata("deserializationError", e.getMessage());
+            if (failOnInvalid) {
+                throw new RuntimeException("Deserialization failed", e);
+            }
+            return null; // soft-fail
         }
-        return JsonMapper.deserialize(jsonOutput, targetType);
     }
     
     public static <T> Builder<T> builder(Class<T> type) {
@@ -62,6 +76,7 @@ public final class SchemaNode<T> implements NodePlugin<String, T> {
         private int maxRetries = 3;
         private String memoryKey;
         private Class<T> targetType;
+        private boolean failOnInvalid = true;
         
         private Builder(Class<T> type) {
             this.targetType = type;
@@ -89,6 +104,11 @@ public final class SchemaNode<T> implements NodePlugin<String, T> {
         
         public Builder<T> memory(String memoryKey) {
             this.memoryKey = memoryKey;
+            return this;
+        }
+        
+        public Builder<T> failOnInvalid(boolean value) {
+            this.failOnInvalid = value;
             return this;
         }
         

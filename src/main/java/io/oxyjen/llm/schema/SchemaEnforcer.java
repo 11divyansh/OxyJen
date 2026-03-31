@@ -1,6 +1,9 @@
 package io.oxyjen.llm.schema;
 
+import java.util.List;
+
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.schema.FieldError.ErrorType;
 
 /**
  * Enforces JSON schema by retrying until valid output.
@@ -17,16 +20,22 @@ public final class SchemaEnforcer {
     private final JSONSchema schema;
     private final int maxRetries;
     private final String schemaJson;
+    private final boolean failOnInvalid;
     
-    public SchemaEnforcer(ChatModel model, JSONSchema schema, int maxRetries) {
+    public SchemaEnforcer(ChatModel model, JSONSchema schema, int maxRetries, boolean failOnInvalid) {
         this.model = model;
         this.schema = schema;
         this.maxRetries = maxRetries;
         this.schemaJson = schema.toJSON();
+        this.failOnInvalid = failOnInvalid;
     }
     
     public SchemaEnforcer(ChatModel model, JSONSchema schema) {
-        this(model, schema, 3);
+        this(model, schema, 3, true);
+    }
+
+    public SchemaEnforcer(ChatModel model, JSONSchema schema, int maxRetries) {
+        this(model, schema, maxRetries, true);
     }
     
     /**
@@ -35,11 +44,11 @@ public final class SchemaEnforcer {
      * @return Valid JSON string
      * @throws SchemaException if all retries fail
      */
-    public String execute(String prompt) {
+    public SchemaResult execute(String prompt) {
         SchemaValidator validator = new SchemaValidator(schema);
-        String currentPrompt = buildInitialPrompt(prompt);
-        
+        String currentPrompt = buildInitialPrompt(prompt);      
         String lastResponse = null;
+        List<FieldError> lastErrors = List.of();
               
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             String response = model.chat(currentPrompt);
@@ -49,6 +58,18 @@ public final class SchemaEnforcer {
             try {
             	json = extractJSON(response);
             } catch (Exception extractionError) {
+            	lastErrors = List.of(
+                        new FieldError(
+                            "$",
+                            ErrorType.PARSE_ERROR,
+                            "json",
+                            response,
+                            extractionError.getMessage()
+                        )
+                    );
+            	if (attempt == maxRetries && !failOnInvalid) {
+                    return new SchemaResult(response, false, lastErrors);
+                }
             	currentPrompt = buildRetryPrompt(
             			prompt,
             			response,
@@ -58,14 +79,18 @@ public final class SchemaEnforcer {
             }
             SchemaValidator.ValidationResult result = validator.validate(json);          
             if (result.isValid()) {
-                return json;
-            }            
+            	return new SchemaResult(json, true, List.of());
+            }           
+            lastErrors = result.errors();
             currentPrompt = buildRetryPrompt(prompt, json, result.formatErrors(),attempt);
         }       
-        throw new SchemaException(
-            "Failed to get valid JSON after " + maxRetries + " attempts",
-            lastResponse
-        );
+        if (failOnInvalid) {
+            throw new SchemaException(
+                "Failed to get valid JSON after " + maxRetries + " attempts",
+                lastResponse
+            );
+        }
+        return new SchemaResult(lastResponse, false, lastErrors);
     }
     
     private String buildInitialPrompt(String userPrompt) {
