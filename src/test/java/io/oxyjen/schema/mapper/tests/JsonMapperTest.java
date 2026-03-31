@@ -15,8 +15,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import io.oxyjen.llm.schema.JsonMapper;
 import io.oxyjen.llm.schema.annotations.JsonIgnore;
+import io.oxyjen.util.JsonMapper;
 
 public class JsonMapperTest {
 

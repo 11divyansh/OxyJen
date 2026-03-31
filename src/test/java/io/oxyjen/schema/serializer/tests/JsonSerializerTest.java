@@ -16,7 +16,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import io.oxyjen.llm.schema.JsonSerializer;
+import io.oxyjen.util.JsonSerializer;
 
 public class JsonSerializerTest {
 

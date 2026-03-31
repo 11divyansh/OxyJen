@@ -1,4 +1,4 @@
-package io.oxyjen.llm.schema;
+package io.oxyjen.util;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -6,6 +6,8 @@ import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.LLM;
+import io.oxyjen.util.JsonMapper;
+import io.oxyjen.util.JsonParser;
 
 /**
  * LLMNode with built-in JSON schema enforcement.

@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +19,7 @@ import io.oxyjen.llm.schema.JSONSchema.PropertySchema;
 import io.oxyjen.llm.schema.SchemaEnforcer;
 import io.oxyjen.llm.schema.SchemaException;
 import io.oxyjen.llm.schema.SchemaNode;
+import io.oxyjen.llm.schema.SchemaResult;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.llm.schema.SchemaValidator.ValidationResult;
 
@@ -171,9 +171,9 @@ public class SchemaTest {
 	        .required("name")
 	        .build();
 	    SchemaEnforcer enforcer = new SchemaEnforcer(model, schema, 2);
-	    String result = enforcer.execute("prompt");
-	    out.println(result);
-	    assertTrue(result.contains("Alice"));
+	    SchemaResult result = enforcer.execute("prompt");
+	    out.println(result.getRawJson());
+	    assertTrue(result.getRawJson().contains("Alice"));
 	}
 
 	@Test

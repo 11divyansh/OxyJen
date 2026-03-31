@@ -11,10 +11,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import io.oxyjen.core.NodeContext;
-import io.oxyjen.llm.schema.JsonSerializer;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.tools.safety.ToolPermission;
 import io.oxyjen.tools.safety.ToolSandbox;
+import io.oxyjen.util.JsonSerializer;
 
 /**
  * Runtime engine for executing tools with validation and safety checks.

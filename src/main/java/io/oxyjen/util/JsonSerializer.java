@@ -1,4 +1,4 @@
-package io.oxyjen.llm.schema;
+package io.oxyjen.util;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;

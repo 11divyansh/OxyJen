@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.oxyjen.util.JsonParser;
+
 public final class SchemaValidator {
 
     private final JSONSchema schema;

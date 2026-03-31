@@ -1,4 +1,4 @@
-package io.oxyjen.llm.schema;
+package io.oxyjen.util;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;

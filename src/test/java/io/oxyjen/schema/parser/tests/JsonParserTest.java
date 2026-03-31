@@ -14,7 +14,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import io.oxyjen.llm.schema.JsonParser;
+import io.oxyjen.util.JsonParser;
 
 public class JsonParserTest {
 	

@@ -4,9 +4,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.oxyjen.llm.schema.JsonMapper;
-import io.oxyjen.llm.schema.JsonParser;
-import io.oxyjen.llm.schema.JsonSerializer;
+import io.oxyjen.util.JsonMapper;
+import io.oxyjen.util.JsonParser;
+import io.oxyjen.util.JsonSerializer;
 
 /**
  * Represents an LLM's request to call a tool.
