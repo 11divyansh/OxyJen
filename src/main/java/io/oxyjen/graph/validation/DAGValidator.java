@@ -1,16 +1,21 @@
 package io.oxyjen.graph.validation;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.edges.CyclicEdge;
 
 public final class DAGValidator {
 
@@ -35,9 +40,77 @@ public final class DAGValidator {
  
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        detectIllegalCycles(graph, errors);
         detectUnreachableNodes(graph, warnings);
         detectOrphanNodes(graph, warnings);
         return new ValidationResult(errors, warnings);
+    }
+  
+    // Cycle detection (DFS on non-cyclic edges only)
+    private static void detectIllegalCycles(Graph graph, List<String> errors) {
+        // Build adjacency using only DirectEdge and ConditionalEdge (CyclicEdge excluded)
+        Map<NodePlugin<?, ?>, List<NodePlugin<?, ?>>> strictAdj = new LinkedHashMap<>();
+        for (NodePlugin<?, ?> node : graph.getNodes()) {
+            strictAdj.put(node, new ArrayList<>());
+        }
+        for (Edge edge : graph.getAllEdges()) {
+            if (!(edge instanceof CyclicEdge)) {
+                strictAdj.get(edge.getSource()).add(edge.getTarget());
+            }
+        }
+        // DFS cycle detection
+        Set<NodePlugin<?, ?>> visited = new HashSet<>();
+        Set<NodePlugin<?, ?>> inStack = new HashSet<>();
+        for (NodePlugin<?, ?> root : graph.getNodes()) {
+            if (!visited.contains(root)) {
+                Deque<NodePlugin<?, ?>> cycle = detectCycleDFS(root, strictAdj, visited, inStack, new ArrayDeque<>());
+                if (cycle != null) {
+                    errors.add("Illegal cycle detected (use CyclicEdge for intentional loops): "
+                        + formatCycle(cycle));
+                }
+            }
+        }
+    }
+ 
+    private static Deque<NodePlugin<?, ?>> detectCycleDFS(
+            NodePlugin<?, ?> node,
+            Map<NodePlugin<?, ?>, List<NodePlugin<?, ?>>> adj,
+            Set<NodePlugin<?, ?>> visited,
+            Set<NodePlugin<?, ?>> inStack,
+            Deque<NodePlugin<?, ?>> path
+    ) {
+        visited.add(node);
+        inStack.add(node);
+        path.addLast(node);
+ 
+        for (NodePlugin<?, ?> neighbor : adj.getOrDefault(node, Collections.emptyList())) {
+            if (!visited.contains(neighbor)) {
+                Deque<NodePlugin<?, ?>> result = detectCycleDFS(neighbor, adj, visited, inStack, path);
+                if (result != null) return result;
+            } else if (inStack.contains(neighbor)) {
+                // found cycle - capture the cycle portion of the path
+                Deque<NodePlugin<?, ?>> cycle = new ArrayDeque<>();
+                boolean inCycle = false;
+                for (NodePlugin<?, ?> n : path) {
+                    if (n == neighbor) inCycle = true;
+                    if (inCycle) cycle.addLast(n);
+                }
+                cycle.addLast(neighbor);
+                return cycle;
+            }
+        }
+ 
+        inStack.remove(node);
+        path.removeLast();
+        return null;
+    }
+    private static String formatCycle(Deque<NodePlugin<?, ?>> cycle) {
+        StringBuilder sb = new StringBuilder();
+        for (NodePlugin<?, ?> n : cycle) {
+            if (sb.length() > 0) sb.append(" -> ");
+            sb.append(n.getName());
+        }
+        return sb.toString();
     }
     // Unreachable node detection (BFS from all roots)
     private static void detectUnreachableNodes(Graph graph, List<String> warnings) {
