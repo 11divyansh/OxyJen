@@ -17,6 +17,22 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.graph.edges.CyclicEdge;
 
+/**
+ * Validates the structural integrity of a {@link Graph} before execution.
+ *
+ * Checks performed:
+ * 1. Basic graph invariants (delegated to {@link Graph#validate()}).
+ * 2. Cycle detection - only {@link CyclicEdge}s are permitted to form cycles.
+ *    Any cycle formed by {@link DirectEdge} or {@link ConditionalEdge} is illegal.
+ * 3. Orphan detection - nodes with no edges (not root, not terminal) are warned.
+ * 4. Unreachable node detection - nodes that can never be reached from any root.
+ *
+ * Usage:
+ * <pre>{@code
+ *   DAGValidator.validate(graph);           // throws on invalid graph
+ *   DAGValidator.ValidationResult r = DAGValidator.inspect(graph); // returns result for logging
+ * }</pre>
+ */
 public final class DAGValidator {
 
 	private DAGValidator() {}
@@ -61,7 +77,8 @@ public final class DAGValidator {
         // DFS cycle detection
         Set<NodePlugin<?, ?>> visited = new HashSet<>();
         Set<NodePlugin<?, ?>> inStack = new HashSet<>();
-        for (NodePlugin<?, ?> root : graph.getNodes()) {
+        Set<NodePlugin<?, ?>> roots = graph.getRootNodes();
+        for (NodePlugin<?, ?> root : roots) {
             if (!visited.contains(root)) {
                 Deque<NodePlugin<?, ?>> cycle = detectCycleDFS(root, strictAdj, visited, inStack, new ArrayDeque<>());
                 if (cycle != null) {
