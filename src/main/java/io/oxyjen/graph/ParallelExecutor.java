@@ -50,7 +50,7 @@ public class ParallelExecutor {
         // fan-in tracking: count how many upstream nodes still need to complete
         // before a given node can start. Keyed by target node.
         Map<NodePlugin<?, ?>, Integer> pendingIncoming = computePendingIncoming(graph);
- 
+        Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         // Completed set - guards against re-executing non-cyclic nodes
         Set<NodePlugin<?, ?>> completed = ConcurrentHashMap.newKeySet();
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
@@ -58,7 +58,7 @@ public class ParallelExecutor {
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
         	if (inProgress.add(root))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, completed, inProgress)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, completed, inProgress, cyclicTargets)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
@@ -90,7 +90,8 @@ public class ParallelExecutor {
             Map<NodePlugin<?, ?>, Object> nodeOutputs,
             Map<NodePlugin<?, ?>, Integer> pendingIncoming,
             Set<NodePlugin<?, ?>> completed,
-            Set<NodePlugin<?, ?>> inProgress
+            Set<NodePlugin<?, ?>> inProgress,
+            Set<NodePlugin<?, ?>> cyclicTargets
     ) {
         return CompletableFuture.supplyAsync(() -> {
             context.getLogger().info("[DAG] Executing: " + node.getName());
@@ -120,7 +121,8 @@ public class ParallelExecutor {
                     continue;
                 } 
                 NodePlugin<?, ?> target = edge.getTarget();
-                if(!(edge instanceof CyclicEdge)) {
+                boolean isCyclic = edge instanceof CyclicEdge;
+                if(!isCyclic && !cyclicTargets.contains(target)) {
                 	// Fan-in: decrement pending counter; only proceed when all incoming are done
                 	int remaining = pendingIncoming.merge(target, -1, Integer::sum);
                 	if (remaining != 0) {
@@ -136,7 +138,7 @@ public class ParallelExecutor {
                 }
                 // TODO v0.5: MergeNode will aggregate multiple inputs properly.
                 downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, completed, inProgress)
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, completed, inProgress, cyclicTargets)
                 );
             }
             if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
@@ -158,5 +160,15 @@ public class ParallelExecutor {
             }
         }
         return incoming;
+    }
+    
+    private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {
+        Set<NodePlugin<?, ?>> set = ConcurrentHashMap.newKeySet();
+        for (Edge e : graph.getAllEdges()) {
+            if (e instanceof CyclicEdge) {
+                set.add(e.getTarget());
+            }
+        }
+        return set;
     }
 }
