@@ -51,14 +51,12 @@ public class ParallelExecutor {
         // before a given node can start. Keyed by target node.
         Map<NodePlugin<?, ?>, Integer> pendingIncoming = computePendingIncoming(graph);
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
-        // Completed set - guards against re-executing non-cyclic nodes
-        Set<NodePlugin<?, ?>> completed = ConcurrentHashMap.newKeySet();
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
         List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
         	if (inProgress.add(root))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, completed, inProgress, cyclicTargets)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, inProgress, cyclicTargets)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
@@ -89,7 +87,6 @@ public class ParallelExecutor {
             NodeContext context,
             Map<NodePlugin<?, ?>, Object> nodeOutputs,
             Map<NodePlugin<?, ?>, Integer> pendingIncoming,
-            Set<NodePlugin<?, ?>> completed,
             Set<NodePlugin<?, ?>> inProgress,
             Set<NodePlugin<?, ?>> cyclicTargets
     ) {
@@ -109,7 +106,6 @@ public class ParallelExecutor {
                 throw new RuntimeException("Node failed: " + node.getName(), e);
             } 
             nodeOutputs.put(node, output);
-            completed.add(node);
             inProgress.remove(node);
             return output;
         }, pool).thenCompose(output -> {
@@ -138,7 +134,7 @@ public class ParallelExecutor {
                 }
                 // TODO v0.5: MergeNode will aggregate multiple inputs properly.
                 downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, completed, inProgress, cyclicTargets)
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, inProgress, cyclicTargets)
                 );
             }
             if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
