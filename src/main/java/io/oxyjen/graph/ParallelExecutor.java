@@ -53,7 +53,95 @@ public class ParallelExecutor {
  
         // Completed set - guards against re-executing non-cyclic nodes
         Set<NodePlugin<?, ?>> completed = ConcurrentHashMap.newKeySet();
-        return null;
+        Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
+        List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
+        for (NodePlugin<?, ?> root : graph.getRootNodes()) {
+        	if (inProgress.add(root))
+        		rootFutures.add(
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, completed, inProgress)
+        		);
+        }
+        CompletableFuture<Void> allDone = CompletableFuture.allOf(
+            rootFutures.toArray(new CompletableFuture[0])
+        );
+        try {
+            allDone.get(); 
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Graph execution interrupted: " + graph.getName(), e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            throw new RuntimeException("Graph execution failed: " + graph.getName(), cause);
+        }
+        Map<String, Object> results = new LinkedHashMap<>();
+        for (NodePlugin<?, ?> terminal : graph.getTerminalNodes()) {
+            results.put(terminal.getName(), nodeOutputs.get(terminal));
+        }
+        return results;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private CompletableFuture<Void> executeNodeAsync(
+            NodePlugin<?, ?> node,
+            Object input,
+            Graph graph,
+            NodeContext context,
+            Map<NodePlugin<?, ?>, Object> nodeOutputs,
+            Map<NodePlugin<?, ?>, Integer> pendingIncoming,
+            Set<NodePlugin<?, ?>> completed,
+            Set<NodePlugin<?, ?>> inProgress
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            context.getLogger().info("[DAG] Executing: " + node.getName());
+            NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
+            safeNode.onStart(context);
+            Object output;
+            try {
+                output = safeNode.process(input, context);
+                safeNode.onFinish(context);
+                context.getLogger().info("[DAG] Completed: " + node.getName());
+            } catch (Exception e) {
+                context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
+                try { context.getExceptionHandler().handleException(safeNode, e, context); } catch (Exception ignored) {}
+                try { safeNode.onError(e, context); } catch (Exception ignored) {}
+                throw new RuntimeException("Node failed: " + node.getName(), e);
+            } 
+            nodeOutputs.put(node, output);
+            completed.add(node);
+            inProgress.remove(node);
+            return output;
+        }, pool).thenCompose(output -> {
+            // Fan-out: evaluate all outgoing edges and schedule eligible targets
+            List<CompletableFuture<Void>> downstream = new ArrayList<>(); 
+            for (Edge edge : graph.getEdgesFrom(node)) {
+                if (!edge.shouldTraverse(output, context)) {
+                    context.getLogger().info("[DAG] Skipping edge: " + edge.getLabel());
+                    continue;
+                } 
+                NodePlugin<?, ?> target = edge.getTarget();
+                if(!(edge instanceof CyclicEdge)) {
+                	// Fan-in: decrement pending counter; only proceed when all incoming are done
+                	int remaining = pendingIncoming.merge(target, -1, Integer::sum);
+                	if (remaining != 0) {
+                		context.getLogger().info(
+                				"[DAG] Node [" + target.getName() + "] waiting for " + remaining + " more upstream nodes."
+                		);
+                		continue;
+                	}
+                	if (!inProgress.add(target)) continue;
+                } else {
+                	// For CyclicEdge, always allow re-execution but still guard duplicate scheduling
+                	if(!inProgress.add(target)) continue;
+                }
+                // TODO v0.5: MergeNode will aggregate multiple inputs properly.
+                downstream.add(
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, completed, inProgress)
+                );
+            }
+            if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
+            return CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0]));
+        });
     }
     /**
      * Computes how many non-cyclic incoming edges each node has.
