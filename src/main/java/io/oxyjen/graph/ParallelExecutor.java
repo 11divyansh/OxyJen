@@ -21,17 +21,21 @@ import io.oxyjen.graph.validation.DAGValidator;
 public class ParallelExecutor {
 
 	private final ForkJoinPool pool;
+	private final FailureMode failureMode;
 	 
     /** Default: uses the common pool.*/
     public ParallelExecutor() {
-        this.pool = ForkJoinPool.commonPool();
+        this(ForkJoinPool.commonPool(), FailureMode.FAIL_FAST);
     }
  
     /** Custom thread pool for controlled parallelism. */
     public ParallelExecutor(ForkJoinPool pool) {
-        this.pool = Objects.requireNonNull(pool);
+        this(pool, FailureMode.FAIL_FAST);
     }
- 
+    public ParallelExecutor(ForkJoinPool pool, FailureMode failureMode) {
+        this.pool = Objects.requireNonNull(pool);
+        this.failureMode = Objects.requireNonNull(failureMode);
+    }
     /**
      * Runs the graph and returns outputs from all terminal nodes, keyed by node name.
      *
@@ -103,12 +107,20 @@ public class ParallelExecutor {
                 context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
                 try { context.getExceptionHandler().handleException(safeNode, e, context); } catch (Exception ignored) {}
                 try { safeNode.onError(e, context); } catch (Exception ignored) {}
-                throw new RuntimeException("Node failed: " + node.getName(), e);
+                context.setMetadata("failed:" + node.getName(), true);
+                if (failureMode == FailureMode.FAIL_FAST) {
+                	throw new RuntimeException("Node failed: " + node.getName(), e);
+                }
+                // CONTINUE_ON_ERROR mode -> skip downstream execution
+                return null;
             } 
             nodeOutputs.put(node, output);
             inProgress.remove(node);
             return output;
         }, pool).thenCompose(output -> {
+        	if (output == null) {
+        		return CompletableFuture.completedFuture(null);
+        	}
             // Fan-out: evaluate all outgoing edges and schedule eligible targets
             List<CompletableFuture<Void>> downstream = new ArrayList<>(); 
             for (Edge edge : graph.getEdgesFrom(node)) {
@@ -167,4 +179,8 @@ public class ParallelExecutor {
         }
         return set;
     }
+}
+enum FailureMode{
+	FAIL_FAST,
+	CONTINUE_ON_ERROR
 }
