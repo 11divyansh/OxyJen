@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Semaphore;
 
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
@@ -22,19 +23,23 @@ public class ParallelExecutor {
 
 	private final ForkJoinPool pool;
 	private final FailureMode failureMode;
+	private final Semaphore limiter;
+	private final int maxConcurrency;
 	 
     /** Default: uses the common pool.*/
     public ParallelExecutor() {
-        this(ForkJoinPool.commonPool(), FailureMode.FAIL_FAST);
+        this(ForkJoinPool.commonPool(), FailureMode.FAIL_FAST, Runtime.getRuntime().availableProcessors());
     }
  
     /** Custom thread pool for controlled parallelism. */
-    public ParallelExecutor(ForkJoinPool pool) {
-        this(pool, FailureMode.FAIL_FAST);
-    }
     public ParallelExecutor(ForkJoinPool pool, FailureMode failureMode) {
+        this(pool, failureMode, Runtime.getRuntime().availableProcessors());
+    }
+    public ParallelExecutor(ForkJoinPool pool, FailureMode failureMode, int maxConcurrency) {
         this.pool = Objects.requireNonNull(pool);
         this.failureMode = Objects.requireNonNull(failureMode);
+        this.maxConcurrency = maxConcurrency;
+        this.limiter = new Semaphore(maxConcurrency);
     }
     /**
      * Runs the graph and returns outputs from all terminal nodes, keyed by node name.
@@ -95,28 +100,34 @@ public class ParallelExecutor {
             Set<NodePlugin<?, ?>> cyclicTargets
     ) {
         return CompletableFuture.supplyAsync(() -> {
-            context.getLogger().info("[DAG] Executing: " + node.getName());
-            NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
-            safeNode.onStart(context);
-            Object output;
-            try {
-                output = safeNode.process(input, context);
+        	boolean acquired = false;
+        	try {
+        		limiter.acquire();
+        		acquired = true;
+        		context.getLogger().info("[DAG] Executing: " + node.getName());
+        		NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
+        		safeNode.onStart(context);
+                Object output = safeNode.process(input, context);
                 safeNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
+                nodeOutputs.put(node, output);
+                return output;
             } catch (Exception e) {
                 context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
-                try { context.getExceptionHandler().handleException(safeNode, e, context); } catch (Exception ignored) {}
-                try { safeNode.onError(e, context); } catch (Exception ignored) {}
+                try { context.getExceptionHandler().handleException((NodePlugin<Object,Object>)node, e, context); } catch (Exception ignored) {}
+                try { ((NodePlugin<Object,Object>)node).onError(e, context); } catch (Exception ignored) {}
                 context.setMetadata("failed:" + node.getName(), true);
                 if (failureMode == FailureMode.FAIL_FAST) {
                 	throw new RuntimeException("Node failed: " + node.getName(), e);
                 }
                 // CONTINUE_ON_ERROR mode -> skip downstream execution
                 return null;
-            } 
-            nodeOutputs.put(node, output);
-            inProgress.remove(node);
-            return output;
+            } finally {
+            	if (acquired) {
+            		limiter.release();
+            	}
+            	inProgress.remove(node);
+            }           
         }, pool).thenCompose(output -> {
         	if (output == null) {
         		return CompletableFuture.completedFuture(null);
