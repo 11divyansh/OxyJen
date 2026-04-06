@@ -1,6 +1,6 @@
 package io.oxyjen.core;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,9 +15,9 @@ import io.oxyjen.core.logging.OxyLogger;
  */
 public class NodeContext {
 
-    private final Map<String, Object> data = new HashMap<>();
+    private final Map<String, Object> data = new ConcurrentHashMap<>();
     private final Logger logger = Logger.getLogger(NodeContext.class.getName());
-    private final Map<String, Object> metadata = new HashMap<>();
+    private final Map<String, Object> metadata = new ConcurrentHashMap<>();
     private final Map<String, Memory> memories = new ConcurrentHashMap<>();
     
     private OxyLogger oxyjenLogger;
@@ -63,7 +63,7 @@ public class NodeContext {
      * @return The shared data map (for debugging or inspection).
      */
     public Map<String, Object> getData() {
-        return data;
+        return Collections.unmodifiableMap(data);
     }
 
     /**
@@ -82,10 +82,14 @@ public class NodeContext {
      */
     public OxyLogger getOxyjenLogger() {
         if (oxyjenLogger == null) {
-        	String graphName = getMetadata("graphName");
-            oxyjenLogger = new OxyLogger(
-                    graphName != null ? graphName : "default-graph"
-            );
+        	synchronized (this) {
+        		if (oxyjenLogger == null) {
+        			String graphName = getMetadata("graphName");
+        			oxyjenLogger = new OxyLogger(
+        					graphName != null ? graphName : "default-graph"
+        			);
+        		}
+        	}
         }
         return oxyjenLogger;
     }
@@ -102,7 +106,11 @@ public class NodeContext {
      */
     public ExceptionHandler getExceptionHandler() {
         if (exceptionHandler == null) {
-            exceptionHandler = ExceptionHandler.defaultHandler();
+        	synchronized(this) {
+        		if (exceptionHandler == null) {
+        			exceptionHandler = ExceptionHandler.defaultHandler();
+        		}
+        	}
         }
         return exceptionHandler;
     }
