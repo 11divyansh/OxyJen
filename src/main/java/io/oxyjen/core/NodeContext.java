@@ -20,8 +20,8 @@ public class NodeContext {
     private final Map<String, Object> metadata = new ConcurrentHashMap<>();
     private final Map<String, Memory> memories = new ConcurrentHashMap<>();
     
-    private OxyLogger oxyjenLogger;
-    private ExceptionHandler exceptionHandler;
+    private volatile OxyLogger oxyjenLogger;
+    private volatile ExceptionHandler exceptionHandler;
 
     /**
      * Stores a key-value pair in the shared context data.
