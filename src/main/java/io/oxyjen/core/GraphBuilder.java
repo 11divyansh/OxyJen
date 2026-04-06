@@ -82,6 +82,26 @@ public class GraphBuilder {
         NodePlugin<?, ?> source = getNode(from);
         return new LoopBuilder(this, source);
     }
+    /** Create bulk node registration to run in parallel*/
+    public GraphBuilder addParallelNodes(Object... nameNodePairs) {
+        if (nameNodePairs.length % 2 != 0) {
+            throw new IllegalArgumentException(
+                "Arguments must be in pairs: (name, node)"
+            );
+        }
+        for (int i = 0; i < nameNodePairs.length; i += 2) {
+            Object nameObj = nameNodePairs[i];
+            Object nodeObj = nameNodePairs[i + 1];
+            if (!(nameObj instanceof String name)) {
+                throw new IllegalArgumentException("Expected String for node name");
+            }
+            if (!(nodeObj instanceof NodePlugin<?, ?> node)) {
+                throw new IllegalArgumentException("Expected NodePlugin for node");
+            }
+            addNode(name, node);
+        }
+        return this;
+    }
     /** To explicitly allow cycles, and restrain user from creating infinite loop*/
     public GraphBuilder allowCycles() {
         this.allowCycles = true;
