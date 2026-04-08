@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
@@ -86,6 +87,31 @@ public class ParallelExecutor {
             results.put(terminal.getName(), nodeOutputs.get(terminal));
         }
         return results;
+    }
+    /**
+     * Convenience method for graphs with exactly one terminal node.
+     *
+     * @throws IllegalStateException if the graph has zero or multiple terminal nodes.
+     */
+    @SuppressWarnings("unchecked")
+    public <O> O runSingle(Graph graph, Object input, NodeContext context) {
+        Set<NodePlugin<?, ?>> terminals = graph.getTerminalNodes();
+        if (terminals.size() != 1) {
+            throw new IllegalStateException(
+                "runSingle() requires exactly 1 terminal node, but graph [" + graph.getName()
+                    + "] has " + terminals.size() + ": "
+                    + terminals.stream().map(NodePlugin::getName).collect(Collectors.joining(", "))
+                    + ". Use run() instead."
+            );
+        }
+        Map<String, Object> results = run(graph, input, context);
+        Object result = results.values().iterator().next();
+        if (result == null) {
+            throw new IllegalStateException(
+                "Terminal node returned null. Possible failure or skipped execution."
+            );
+        }
+        return (O) result;
     }
     
     @SuppressWarnings("unchecked")
