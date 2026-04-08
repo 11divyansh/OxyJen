@@ -105,10 +105,11 @@ public class ParallelExecutor {
             );
         }
         Map<String, Object> results = run(graph, input, context);
-        Object result = results.values().iterator().next();
+        NodePlugin<?, ?> terminal = terminals.iterator().next();
+        Object result = results.get(terminal.getName());
         if (result == null) {
             throw new IllegalStateException(
-                "Terminal node returned null. Possible failure or skipped execution."
+                "Terminal node [" + terminal.getName() + "] returned null. Possible failure or skipped execution."
             );
         }
         return (O) result;
