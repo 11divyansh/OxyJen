@@ -43,21 +43,28 @@ class GraphBuilderTests {
 	    });
 	}
 	@Test
-	void shouldRouteBasedOnCondition() {
+	void shouldRouteBasedOnCondition_debug() {
 	    Graph graph = GraphBuilder.named("routing")
 	            .addNode("start", new Nodes.InputNode())
 	            .addNode("A", new Nodes.AppendNode("-A"))
 	            .addNode("B", new Nodes.AppendNode("-B"))
-	            .route("start", ctx -> (String) ctx.getMetadata("route"))
+	            .route("start", ctx -> {
+	                Object val = ctx.getMetadata("route");
+	                System.out.println("ROUTER VALUE = " + val);
+	                return (String) val;
+	            })
 	                .to("A", "A")
 	                .to("B", "B")
 	                .end()
 	            .build();
+
 	    NodeContext ctx = new NodeContext();
 	    ctx.setMetadata("route", "A");
-	    ParallelExecutor executor = new ParallelExecutor();
-	    Map<String, Object> result = executor.run(graph, "data", ctx);
-	    assertTrue(result.values().contains("data-A"));
+
+	    Map<String, Object> result = new ParallelExecutor().run(graph, "data", ctx);
+
+	    System.out.println("RESULT = " + result);
+	    assertEquals("data-A", result.get("AppendNode"));
 	}
 	@Test
 	void shouldLoopUntilConditionFails() {

@@ -1,7 +1,7 @@
 package io.oxyjen.graph;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,7 @@ public class ParallelExecutor {
         context.setMetadata("graphName", graph.getName());
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
-        Map<NodePlugin<?, ?>, Object> nodeOutputs = new ConcurrentHashMap<>();
+        Map<String, Object> nodeOutputs = new ConcurrentHashMap<>();
        
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
@@ -82,7 +82,7 @@ public class ParallelExecutor {
         }
         Map<String, Object> results = new LinkedHashMap<>();
         for (NodePlugin<?, ?> terminal : graph.getTerminalNodes()) {
-            results.put(terminal.getName(), nodeOutputs.get(terminal));
+            results.put(terminal.getName(), nodeOutputs.get(terminal.getName()));
         }
         if (results.isEmpty()) {
             throw new IllegalStateException(
@@ -124,7 +124,7 @@ public class ParallelExecutor {
             Object input,
             Graph graph,
             NodeContext context,
-            Map<NodePlugin<?, ?>, Object> nodeOutputs,
+            Map<String, Object> nodeOutputs,
             Set<NodePlugin<?, ?>> inProgress,
             Set<NodePlugin<?, ?>> cyclicTargets
     ) {
@@ -139,7 +139,7 @@ public class ParallelExecutor {
                 Object output = safeNode.process(input, context);
                 safeNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
-                nodeOutputs.put(node, output);
+                nodeOutputs.put(node.getName(), output);
                 return output;
             } catch (Exception e) {
                 context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
@@ -164,7 +164,7 @@ public class ParallelExecutor {
         	boolean anyTraversed = false;
             // Fan-out: evaluate all outgoing edges and schedule eligible targets
             List<CompletableFuture<Void>> downstream = new ArrayList<>(); 
-            Map<Edge, Boolean> decisions = new HashMap<>();
+            Map<Edge, Boolean> decisions = new IdentityHashMap<>();
             boolean hasCyclic = false;
             boolean shouldContinueLoop = false;
             for (Edge edge : graph.getEdgesFrom(node)) {
