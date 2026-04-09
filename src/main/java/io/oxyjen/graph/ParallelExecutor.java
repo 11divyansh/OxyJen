@@ -1,6 +1,7 @@
 package io.oxyjen.graph;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,17 +57,14 @@ public class ParallelExecutor {
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
         Map<NodePlugin<?, ?>, Object> nodeOutputs = new ConcurrentHashMap<>();
- 
-        // fan-in tracking: count how many upstream nodes still need to complete
-        // before a given node can start. Keyed by target node.
-        Map<NodePlugin<?, ?>, Integer> pendingIncoming = computePendingIncoming(graph);
+       
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
         List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
         	if (inProgress.add(root))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, pendingIncoming, inProgress, cyclicTargets)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, cyclicTargets)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
@@ -85,6 +83,11 @@ public class ParallelExecutor {
         Map<String, Object> results = new LinkedHashMap<>();
         for (NodePlugin<?, ?> terminal : graph.getTerminalNodes()) {
             results.put(terminal.getName(), nodeOutputs.get(terminal));
+        }
+        if (results.isEmpty()) {
+            throw new IllegalStateException(
+                "Graph produced no outputs. Possible causes: no terminal nodes or all branches skipped."
+            );
         }
         return results;
     }
@@ -122,7 +125,6 @@ public class ParallelExecutor {
             Graph graph,
             NodeContext context,
             Map<NodePlugin<?, ?>, Object> nodeOutputs,
-            Map<NodePlugin<?, ?>, Integer> pendingIncoming,
             Set<NodePlugin<?, ?>> inProgress,
             Set<NodePlugin<?, ?>> cyclicTargets
     ) {
@@ -159,53 +161,55 @@ public class ParallelExecutor {
         	if (output == null) {
         		return CompletableFuture.completedFuture(null);
         	}
+        	boolean anyTraversed = false;
             // Fan-out: evaluate all outgoing edges and schedule eligible targets
             List<CompletableFuture<Void>> downstream = new ArrayList<>(); 
+            Map<Edge, Boolean> decisions = new HashMap<>();
+            boolean hasCyclic = false;
+            boolean shouldContinueLoop = false;
             for (Edge edge : graph.getEdgesFrom(node)) {
-                if (!edge.shouldTraverse(output, context)) {
+            	boolean decision = edge.shouldTraverse(output, context);
+                decisions.put(edge, decision);
+                if (edge instanceof CyclicEdge) {
+                    hasCyclic = true;
+                    if (decision) {
+                        shouldContinueLoop = true;
+                    }
+                }
+            }
+            for (Edge edge : graph.getEdgesFrom(node)) {
+            	if (hasCyclic) {
+            		if (shouldContinueLoop && !(edge instanceof CyclicEdge)) {
+                    	continue;
+                	}
+            		if (!shouldContinueLoop && edge instanceof CyclicEdge) {
+                    	continue;
+                	}
+            	}
+                if (!decisions.get(edge)) {
                     context.getLogger().info("[DAG] Skipping edge: " + edge.getLabel());
                     continue;
                 } 
+                anyTraversed = true;
                 NodePlugin<?, ?> target = edge.getTarget();
+                // For CyclicEdge, always allow re-execution but still guard duplicate scheduling
                 boolean isCyclic = edge instanceof CyclicEdge;
-                if(!isCyclic && !cyclicTargets.contains(target)) {
-                	// Fan-in: decrement pending counter; only proceed when all incoming are done
-                	int remaining = pendingIncoming.merge(target, -1, Integer::sum);
-                	if (remaining != 0) {
-                		context.getLogger().info(
-                				"[DAG] Node [" + target.getName() + "] waiting for " + remaining + " more upstream nodes."
-                		);
-                		continue;
-                	}
-                	if (!inProgress.add(target)) continue;
-                } else {
-                	// For CyclicEdge, always allow re-execution but still guard duplicate scheduling
+                if (isCyclic) {
                 	if(!inProgress.add(target)) continue;
                 }
                 // TODO v0.5: MergeNode will aggregate multiple inputs properly.
                 downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, pendingIncoming, inProgress, cyclicTargets)
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, cyclicTargets)
+                );
+            }
+            if (!anyTraversed && !graph.getEdgesFrom(node).isEmpty()) {
+                context.getLogger().warning(
+                    "[DAG] No route matched for node: " + node.getName()
                 );
             }
             if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
             return CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0]));
         });
-    }
-    /**
-     * Computes how many non-cyclic incoming edges each node has.
-     * Used for fan-in synchronization - a node only runs when all its upstream nodes are done.
-     */
-    private Map<NodePlugin<?, ?>, Integer> computePendingIncoming(Graph graph) {
-        Map<NodePlugin<?, ?>, Integer> incoming = new ConcurrentHashMap<>();
-        for (NodePlugin<?, ?> node : graph.getNodes()) {
-            incoming.put(node, 0);
-        }
-        for (Edge edge : graph.getAllEdges()) {
-            if (!(edge instanceof CyclicEdge)) {
-                incoming.merge(edge.getTarget(), 1, Integer::sum);
-            }
-        }
-        return incoming;
     }
     
     private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {

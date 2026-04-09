@@ -139,14 +139,23 @@ public class GraphBuilder {
         }
         public RouteBuilder to(String key, String targetName) {
             NodePlugin<?, ?> target = builder.getNode(targetName);
-
             builder.edges.add(new ConditionalEdge<>(
-                source,
-                target,
-                (out, ctx) -> key.equals(router.apply(ctx))
+            		source,
+            	    target,
+            	    (out, ctx) -> {
+            	        String decision = router.apply(ctx);
+            	        ctx.getLogger().info(
+            	            "[ROUTE] Node=" + source.getName() +
+            	            " Decision=" + decision +
+            	            " Checking=" + key +
+            	            " -> " + (key.equals(decision) ? "MATCH" : "SKIP")
+            	        );
+            	        return key.equals(decision);
+            	    }
             ));
             return this;
         }
+        public GraphBuilder end() { return builder; }
     }
     public class LoopBuilder {
 

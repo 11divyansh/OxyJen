@@ -179,6 +179,9 @@ public class Graph {
                 "If you intended a loop, use CyclicEdge and ensure at least one entry point."
             );
         }
+        if (getTerminalNodes().isEmpty()) {
+            throw new IllegalStateException("Graph must have at least one terminal node.");
+        }
         for (Edge edge : getAllEdges()) {
             if (!nodes.contains(edge.getSource())) {
                 throw new IllegalStateException(
