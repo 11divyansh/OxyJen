@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +14,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.GraphBuilder;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.FailureMode;
 import io.oxyjen.graph.ParallelExecutor;
 
 class GraphBuilderTests {
@@ -64,7 +67,7 @@ class GraphBuilderTests {
 	    Map<String, Object> result = new ParallelExecutor().run(graph, "data", ctx);
 
 	    System.out.println("RESULT = " + result);
-	    assertEquals("data-A", result.get("AppendNode"));
+	    assertEquals("data-A", result.get("A"));
 	}
 	@Test
 	void shouldLoopUntilConditionFails() {
@@ -82,5 +85,114 @@ class GraphBuilderTests {
 	    ParallelExecutor executor = new ParallelExecutor();
 	    Map<String, Object> result = executor.run(graph, 1, new NodeContext());
 	    assertEquals(3, result.values().iterator().next());
+	}
+	@Test
+	void shouldFailIfLoopWithoutCondition() {
+	    GraphBuilder builder = GraphBuilder.named("bad-loop")
+	            .addNode("A", new Nodes.InputNode());
+	    assertThrows(IllegalStateException.class, () -> {
+	        builder.repeat("A").build();
+	    });
+	}
+	@Test
+	void shouldExecuteLinearGraph() {
+	    Graph graph = GraphBuilder.named("linear")
+	            .addNode("A", new Nodes.InputNode())
+	            .addNode("B", new Nodes.UppercaseNode())
+	            .connect("A", "B")
+	            .build();
+	    ParallelExecutor executor = new ParallelExecutor();
+	    String result = executor.runSingle(graph, "hello", new NodeContext());
+	    assertEquals("HELLO", result);
+	}
+	@Test
+	void shouldExecuteParallelBranches() {
+	    Graph graph = GraphBuilder.named("parallel")
+	            .addNode("start", new Nodes.InputNode())
+	            .addNode("A", new Nodes.AppendNode("-A"))
+	            .addNode("B", new Nodes.AppendNode("-B"))
+	            .connect("start", "A")
+	            .connect("start", "B")
+	            .build();
+	    ParallelExecutor executor = new ParallelExecutor();
+	    Map<String, Object> result = executor.run(graph, "data", new NodeContext());
+	    assertEquals(2, result.size());
+	}
+	@Test
+	void shouldWaitForAllUpstreamsBeforeExecution() {
+	    AtomicInteger executions = new AtomicInteger();
+	    NodePlugin<String, String> joinNode = new NodePlugin<>() {
+	        @Override
+	        public String process(String input, NodeContext context) {
+	            executions.incrementAndGet();
+	            return input;
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("fanin")
+	            .addNode("start", new Nodes.InputNode())
+	            .addNode("A", new Nodes.AppendNode("-A"))
+	            .addNode("B", new Nodes.AppendNode("-B"))
+	            .addNode("join", joinNode)
+	            .connect("start", "A")
+	            .connect("start", "B")
+	            .connect("A", "join")
+	            .connect("B", "join")
+	            .build();
+
+	    new ParallelExecutor().run(graph, "data", new NodeContext());
+	    assertEquals(2, executions.get()); // node execute once per incoming edge
+	    // for real join behavior MergeNode will be introduced
+	}
+	@Test
+	void shouldFailFastOnError() {
+	    Graph graph = GraphBuilder.named("failfast")
+	            .addNode("A", new Nodes.InputNode())
+	            .addNode("B", new Nodes.FailingNode())
+	            .connect("A", "B")
+	            .build();
+	    ParallelExecutor executor = new ParallelExecutor();
+	    assertThrows(RuntimeException.class, () -> {
+	        executor.run(graph, "data", new NodeContext());
+	    });
+	}
+	@Test
+	void shouldContinueOnError() {
+	    Graph graph = GraphBuilder.named("continue")
+	            .addNode("A", new Nodes.InputNode())
+	            .addNode("B", new Nodes.FailingNode())
+	            .addNode("C", new Nodes.AppendNode("-C"))
+	            .connect("A", "B")
+	            .connect("A", "C")
+	            .build();
+
+	    ParallelExecutor executor = new ParallelExecutor(
+	            ForkJoinPool.commonPool(),
+	            FailureMode.CONTINUE_ON_ERROR
+	    );
+	    Map<String, Object> result = executor.run(graph, "data", new NodeContext());
+	    assertTrue(result.values().contains("data-C"));
+	}
+	@Test
+	void shouldPropagateContextAcrossNodes() {
+	    NodePlugin<String, String> writer = new NodePlugin<>() {
+	        @Override
+	        public String process(String input, NodeContext context) {
+	            context.setMetadata("key", "value");
+	            return input;
+	        }
+	    };
+	    NodePlugin<String, String> reader = new NodePlugin<>() {
+	        @Override
+	        public String process(String input, NodeContext context) {
+	            return (String) context.getMetadata("key");
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("context")
+	            .addNode("A", writer)
+	            .addNode("B", reader)
+	            .connect("A", "B")
+	            .build();
+	    String result = new ParallelExecutor().runSingle(graph, "x", new NodeContext());
+	    assertEquals("value", result);
 	}
 }

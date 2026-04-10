@@ -38,7 +38,7 @@ public class GraphBuilder {
                 "Duplicate node name: " + name
             );
         }
-        nodes.put(name, node);
+        nodes.put(name, new NamedNode<>(name, node));
         return this;
     }
     /**
@@ -201,5 +201,24 @@ public class GraphBuilder {
             ));
             return builder;
         }
+    }
+}
+class NamedNode<I, O> implements NodePlugin<I, O> {
+	private final String name;
+    private final NodePlugin<I,O> delegate;
+
+    public NamedNode(String name, NodePlugin<I,O> delegate) {
+        this.name = name;
+        this.delegate = delegate;
+    }
+
+    @Override
+    public O process(I input, NodeContext context) {
+        return delegate.process(input, context);
+    }
+
+    @Override
+    public String getName() {
+        return name;
     }
 }

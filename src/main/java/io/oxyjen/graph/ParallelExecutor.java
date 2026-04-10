@@ -222,7 +222,3 @@ public class ParallelExecutor {
         return set;
     }
 }
-enum FailureMode{
-	FAIL_FAST,
-	CONTINUE_ON_ERROR
-}
