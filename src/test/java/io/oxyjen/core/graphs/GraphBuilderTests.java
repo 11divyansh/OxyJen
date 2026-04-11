@@ -1,6 +1,7 @@
 package io.oxyjen.core.graphs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -194,5 +195,109 @@ class GraphBuilderTests {
 	            .build();
 	    String result = new ParallelExecutor().runSingle(graph, "x", new NodeContext());
 	    assertEquals("value", result);
+	}
+	@Test
+	void shouldTraverseConditionalEdgeWhenTrue() {
+	    Graph graph = GraphBuilder.named("conditional")
+	            .addNode("A", (input,ctx) -> input)
+	            .addNode("B", (input,ctx) -> input + "-B")
+	            .connectConditional("A", "B", (out, ctx) -> true)
+	            .build();
+	    String result = new ParallelExecutor().runSingle(graph, "x", new NodeContext());
+	    assertEquals("x-B", result);
+	}
+	@Test
+	void shouldSkipConditionalEdgeWhenFalse() {
+	    Graph graph = GraphBuilder.named("conditional-false")
+	            .addNode("A", (input,ctx) -> input)
+	            .addNode("B", (input,ctx) -> input + "-B")
+	            .connectConditional("A", "B", (out, ctx) -> false)
+	            .build();
+	    Map<String, Object> result = new ParallelExecutor().run(graph, "x", new NodeContext());
+	    assertFalse(result.containsValue("x-B"));
+	}
+	@Test
+	void shouldRouteToCorrectBranch() {
+	    Graph graph = GraphBuilder.named("route")
+	            .addNode("start", (input,ctx) -> input)
+	            .addNode("A", (input,ctx) -> input + "-A")
+	            .addNode("B", (input,ctx) -> input + "-B")
+	            .route("start", ctx -> (String) ctx.getMetadata("r"))
+	                .to("A", "A")
+	                .to("B", "B")
+	                .end()
+	            .build();
+	    NodeContext ctx = new NodeContext();
+	    ctx.setMetadata("r", "B");
+	    Map<String, Object> result = new ParallelExecutor().run(graph, "x", ctx);
+	    assertTrue(result.containsValue("x-B"));
+	}
+	@Test
+	void shouldStopLoopAtMaxIterations() {
+	    AtomicInteger count = new AtomicInteger();
+	    NodePlugin<Integer, Integer> node = new NodePlugin<>() {
+	        public Integer process(Integer input, NodeContext ctx) {
+	            return count.incrementAndGet();
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("repeat")
+	            .addNode("loop", node)
+	            .addNode("end", (NodePlugin<Integer, Integer>) (i, ctx) -> i)
+	            .connect("loop", "end")
+	            .repeat("loop")
+	                .whileCondition((out, ctx) -> true)
+	                .max(3)
+	                .build()
+	            .build();
+	    new ParallelExecutor().run(graph, 1, new NodeContext());
+	    assertEquals(4, count.get());
+	}
+	@Test
+	void shouldLoopToDifferentNode() {
+	    AtomicInteger count = new AtomicInteger();
+	    NodePlugin<Integer, Integer> A = new NodePlugin<>() {
+	        public Integer process(Integer input, NodeContext ctx) {
+	            return input + 1;
+	        }
+	    };
+	    NodePlugin<Integer, Integer> B = new NodePlugin<>() {
+	        public Integer process(Integer input, NodeContext ctx) {
+	            return count.incrementAndGet();
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("loop-different")
+	            .addNode("A", A)
+	            .addNode("B", B)
+	            .addNode("end", (NodePlugin<Integer, Integer>) (i, ctx) -> i)
+	            .connect("A", "B")
+	            .connect("B", "end")
+	            .loop("B")
+	                .to("A")
+	                .whileCondition((out, ctx) -> count.get() < 3)
+	                .max(5)
+	                .build()
+	            .build();
+	    new ParallelExecutor().run(graph, 1, new NodeContext());
+	    assertEquals(3, count.get());
+	}
+	@Test
+	void shouldPreventInfiniteLoopViaMaxIterations() {
+	    AtomicInteger count = new AtomicInteger();
+	    NodePlugin<Integer, Integer> node = new NodePlugin<>() {
+	        public Integer process(Integer input, NodeContext ctx) {
+	            return count.incrementAndGet();
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("cycle")
+	            .addNode("A", node)
+	            .addNode("end", (NodePlugin<Integer, Integer>) (i, ctx) -> i)
+	            .connect("A", "end")
+	            .repeat("A")
+	                .whileCondition((out, ctx) -> true) // always true
+	                .max(2)
+	                .build()
+	            .build();
+	    new ParallelExecutor().run(graph, 1, new NodeContext());
+	    assertEquals(3, count.get());
 	}
 }
