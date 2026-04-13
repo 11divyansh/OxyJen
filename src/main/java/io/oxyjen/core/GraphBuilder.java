@@ -116,6 +116,13 @@ public class GraphBuilder {
         for (Edge edge : edges) {
         	graph.addEdge(edge);
         }
+        long uniqueNames = nodes.values().stream()
+                .map(NodePlugin::getName)
+                .distinct()
+                .count();
+        if (uniqueNames != nodes.size()) {
+            throw new IllegalStateException("Duplicate node names detected");
+        }
         graph.validate();
         return graph;
     }

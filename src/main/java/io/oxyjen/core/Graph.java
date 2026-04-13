@@ -165,6 +165,14 @@ public class Graph {
     public String getName() {
         return name;
     }
+    public NodePlugin<?, ?> findNodeByName(String name) {
+        for (NodePlugin<?, ?> node : nodes) {
+            if (node.getName().equals(name)) {
+                return node;
+            }
+        }
+        return null;
+    }
 
     /**
      * Simple validation: ensure graph has at least one node.

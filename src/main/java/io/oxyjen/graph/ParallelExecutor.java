@@ -18,6 +18,7 @@ import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.validation.DAGValidator;
 
@@ -140,6 +141,10 @@ public class ParallelExecutor {
                 safeNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
                 nodeOutputs.put(node.getName(), output);
+                if (output instanceof BranchNode.RoutedResult routed) {
+                	nodeOutputs.put(node.getName(), routed.output());
+                	return routed;
+                }
                 return output;
             } catch (Exception e) {
                 context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
@@ -160,6 +165,26 @@ public class ParallelExecutor {
         }, pool).thenCompose(output -> {
         	if (output == null) {
         		return CompletableFuture.completedFuture(null);
+        	}
+        	if (output instanceof BranchNode.RoutedResult routed) {
+        		 context.getLogger().info(
+        				 "[BranchNode] Routing -> " + routed.nextNode()
+                 );
+                 NodePlugin<?, ?> target = graph.findNodeByName(routed.nextNode());
+                 if (target == null) {
+                	 throw new IllegalStateException(
+                			 "BranchNode [" + node.getName() + "] routed to unknown node: " + routed.nextNode()
+                     );
+                 }
+                 return executeNodeAsync(
+                     target,
+                     routed.output(),
+                     graph,
+                     context,
+                     nodeOutputs,
+                     inProgress,
+                     cyclicTargets
+                 );
         	}
         	boolean anyTraversed = false;
             // Fan-out: evaluate all outgoing edges and schedule eligible targets

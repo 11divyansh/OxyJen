@@ -19,73 +19,61 @@ import io.oxyjen.core.NodePlugin;
  *
  * @param <I> Input type this node receives.
  */
-public class BranchNode<I> implements NodePlugin<I, BranchNode.BranchResult> {
+public class BranchNode<I> implements NodePlugin<I, Object> {
 
-    /**
-     * Wraps the selected branch name and transformed output.
-     * Stored in context under the node's name so downstream ConditionalEdges can route.
-     */
-    public record BranchResult(String branchName, Object output) {
-        /** Convenience check for ConditionalEdge predicates. */
-        public boolean is(String name) {
-            return branchName.equals(name);
-        }
-
-        @SuppressWarnings("unchecked")
-        public <T> T outputAs() {
-            return (T) output;
-        }
-    }
+	public record RoutedResult(String nextNode, Object output) {}
 
     private record Branch<I>(
         String name,
         Predicate<I> predicate,
-        Function<I, Object> transform
+        Function<I, Object> transform,
+        String nextNode
     ) {}
 
     private final String name;
     private final List<Branch<I>> branches;
     private final Function<I, Object> elseBranch;    
-    private final String elseBranchName;
+    private final String elseNextNode;
 
     private BranchNode(
             String name,
             List<Branch<I>> branches,
             Function<I, Object> elseBranch,
-            String elseBranchName
+            String elseNextNode
     ) {
         this.name = Objects.requireNonNull(name);
         this.branches = List.copyOf(branches);
         this.elseBranch = elseBranch;
-        this.elseBranchName = elseBranchName;
+        this.elseNextNode = elseNextNode;
     }
 
     @Override
-    public BranchResult process(I input, NodeContext context) {
+    public Object process(I input, NodeContext context) {
         for (Branch<I> branch : branches) {
             if (branch.predicate().test(input)) {
                 Object output = branch.transform().apply(input);
-                BranchResult result = new BranchResult(branch.name(), output);
-                context.set(name + ".branch", result);
+                incrementMetric(context, branch.name);
                 context.getLogger().info(
-                    "[BranchNode:" + name + "] Selected branch: " + branch.name()
+                    "[BranchNode:" + name + "] -> " + branch.name()
                 );
-                return result;
+                return new RoutedResult(branch.nextNode, output);
             }
         }
 
         // no branch matched
         if (elseBranch != null) {
             Object output = elseBranch.apply(input);
-            BranchResult result = new BranchResult(elseBranchName, output);
-            context.set(name + ".branch", result);
             context.getLogger().info(
-                "[BranchNode:" + name + "] No branch matched, using else: " + elseBranchName
-            );
-            return result;
+                "[BranchNode:" + name + "] No branch matched, using else");
+            return new RoutedResult(elseNextNode, output);
         }
 
         throw new NoBranchMatchedException(name, input);
+    }
+    private void incrementMetric(NodeContext ctx, String branch) {
+        String key = "branch." + name + "." + branch + ".count";
+        Integer count = ctx.get(key, Integer.class).orElse(0);
+        ctx.set(key, count + 1);
     }
 
     @Override
@@ -100,63 +88,48 @@ public class BranchNode<I> implements NodePlugin<I, BranchNode.BranchResult> {
     public static final class Builder<I> {
 
         private final List<Branch<I>> branches = new ArrayList<>();
-        private Function<I, Object> elseBranch = null;
-        private String elseBranchName = "else";
+        private Function<I, Object> elseBranch;
+        private String elseNext;
 
-        /**
-         * Add a named branch with a predicate and an identity transform (pass-through).
-         */
-        public Builder<I> branch(String name, Predicate<I> predicate) {
-            return branch(name, predicate, input -> input);
+        @SuppressWarnings("unchecked")
+        public Builder<I> when(String name, Predicate<I> predicate) {
+            return branch(name, predicate, (Function<I, Object>) Function.identity(), null);
         }
 
-        /**
-         * Add a named branch with a predicate and a value transform.
-         * Branches are evaluated in insertion order - first match wins.
-         */
-        public Builder<I> branch(
+        public Builder<I> when(
                 String name,
                 Predicate<I> predicate,
                 Function<I, Object> transform
         ) {
-            Objects.requireNonNull(name, "Branch name must not be null");
-            Objects.requireNonNull(predicate, "Branch predicate must not be null");
-            Objects.requireNonNull(transform, "Branch transform must not be null");
-            branches.add(new Branch<>(name, predicate, transform));
+            return branch(name, predicate, transform, null);
+        }
+
+        // internal
+        private Builder<I> branch(
+                String name,
+                Predicate<I> predicate,
+                Function<I, Object> transform,
+                String nextNode
+        ) {
+            branches.add(new Branch<>(name, predicate, transform, nextNode));
             return this;
         }
 
-        /**
-         * Add a catch-all else branch. If no other branch matches, this runs.
-         * The else branch is always a pass-through of the input value.
-         */
-        public Builder<I> orElse(String branchName) {
-            return orElse(branchName, input -> input);
-        }
-
-        /**
-         * Add a catch-all else branch with a custom transform.
-         */
-        public Builder<I> orElse(String branchName, Function<I, Object> transform) {
-            this.elseBranchName = Objects.requireNonNull(branchName);
-            this.elseBranch = Objects.requireNonNull(transform);
+        public Builder<I> then(String nextNode) {
+            Branch<I> last = branches.remove(branches.size() - 1);
+            branches.add(new Branch<>(last.name, last.predicate, last.transform, nextNode));
             return this;
         }
 
-        /**
-         * If no branch matches, throw {@link NoBranchMatchedException} (default behaviour).
-         * Calling this is optional - it's the default when orElse() is not called.
-         */
-        public Builder<I> orElseThrow() {
-            this.elseBranch = null;
+        @SuppressWarnings("unchecked")
+        public Builder<I> orElse(String nextNode) {
+            this.elseNext = nextNode;
+            this.elseBranch = (Function<I, Object>) Function.identity();
             return this;
         }
 
-        public BranchNode<I> build(String nodeName) {
-            if (branches.isEmpty()) {
-                throw new IllegalStateException("BranchNode [" + nodeName + "] must have at least one branch");
-            }
-            return new BranchNode<>(nodeName, branches, elseBranch, elseBranchName);
+        public BranchNode<I> build(String name) {
+            return new BranchNode<>(name, branches, elseBranch, elseNext);
         }
     }
 
