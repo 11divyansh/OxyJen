@@ -19,6 +19,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.graph.branching.BranchNode;
+import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.validation.DAGValidator;
 
@@ -140,11 +141,11 @@ public class ParallelExecutor {
                 Object output = safeNode.process(input, context);
                 safeNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
-                nodeOutputs.put(node.getName(), output);
                 if (output instanceof BranchNode.RoutedResult routed) {
                 	nodeOutputs.put(node.getName(), routed.output());
                 	return routed;
                 }
+                nodeOutputs.put(node.getName(), output);
                 return output;
             } catch (Exception e) {
                 context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
@@ -185,6 +186,30 @@ public class ParallelExecutor {
                      inProgress,
                      cyclicTargets
                  );
+        	}
+        	if (output instanceof RouterNode.RoutedResult routed) {
+        		nodeOutputs.put(node.getName(), routed.routes());
+        	    List<CompletableFuture<Void>> futures = new ArrayList<>();
+        	    for (Map.Entry<String, Object> entry : routed.routes().entrySet()) {
+        	        NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
+        	        if (target == null) {
+        	            throw new IllegalStateException(
+        	                "RouterNode routed to unknown node: " + entry.getKey()
+        	            );
+        	        }
+        	        futures.add(
+        	            executeNodeAsync(
+        	                target,
+        	                entry.getValue(),
+        	                graph,
+        	                context,
+        	                nodeOutputs,
+        	                inProgress,
+        	                cyclicTargets
+        	            )
+        	        );
+        	    }
+        	    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
         	}
         	boolean anyTraversed = false;
             // Fan-out: evaluate all outgoing edges and schedule eligible targets
