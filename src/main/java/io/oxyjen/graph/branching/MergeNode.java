@@ -59,6 +59,52 @@ public class MergeNode implements NodePlugin<Object, Object> {
         this.timeoutMs = timeoutMs;
         this.latch = new CountDownLatch(expectedContributors.size());
     }
+    
+    /**
+     * Delivers a result from an upstream parallel branch.
+     *
+     * This must be called by each expected upstream node - typically in their
+     * {@code onFinish()} hook - before MergeNode's {@code process()} can return.
+     *
+     * @param contributorName The name of the upstream node contributing (must match an expected contributor).
+     * @param value           The output value from that upstream node.
+     * @param context         The shared execution context (used for logging).
+     */
+    public void contribute(String contributorName, Object value, NodeContext context) {
+        if (!expectedContributors.contains(contributorName)) {
+            context.getLogger().warning(
+                "[MergeNode:" + name + "] Unexpected contributor '" + contributorName
+                    + "' - ignored. Expected: " + expectedContributors
+            );
+            return;
+        }
+ 
+        if (contributions.putIfAbsent(contributorName, value) != null) {
+            context.getLogger().warning(
+                "[MergeNode:" + name + "] Duplicate contribution from '" + contributorName + "' — ignored."
+            );
+            return;
+        }
+ 
+        if (firstArrival == null) {
+            firstArrival = value; // for FIRST_WINS (racy but intentional for that strategy)
+        }
+ 
+        context.getLogger().info(
+            "[MergeNode:" + name + "] Received contribution from: " + contributorName
+                + " (" + contributions.size() + "/" + expectedContributors.size() + " arrived)"
+        );
+ 
+        latch.countDown();
+    }
+ 
+    /**
+     * Registers this MergeNode instance in the context so upstream parallel nodes can find it.
+     * Called automatically by the executor before graph traversal begins.
+     */
+    public void register(NodeContext context) {
+        context.set(CONTEXT_KEY_PREFIX + name, this);
+    }
 
 	@Override
 	public Object process(Object input, NodeContext context) {
