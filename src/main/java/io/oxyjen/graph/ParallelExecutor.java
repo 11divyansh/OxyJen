@@ -19,6 +19,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.graph.branching.BranchNode;
+import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.validation.DAGValidator;
@@ -59,7 +60,12 @@ public class ParallelExecutor {
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
         Map<String, Object> nodeOutputs = new ConcurrentHashMap<>();
-       
+        // register merge nodes
+        for (NodePlugin<?, ?> node : graph.getNodes()) {
+            if (node instanceof MergeNode merge) {
+                merge.register(context);
+            }
+        }
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
         List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
@@ -242,12 +248,30 @@ public class ParallelExecutor {
                 } 
                 anyTraversed = true;
                 NodePlugin<?, ?> target = edge.getTarget();
+                if (target instanceof MergeNode merge) {
+                    merge.contribute(node.getName(), output, context);
+                    if (merge.getMissingContributors(context).isEmpty()) {
+                        if (inProgress.add(merge)) { //prevent duplicate execution
+                            downstream.add(
+                                executeNodeAsync(
+                                    merge,
+                                    null, // MergeNode doesn't need input
+                                    graph,
+                                    context,
+                                    nodeOutputs,
+                                    inProgress,
+                                    cyclicTargets
+                                )
+                            );
+                        }
+                    }
+                    continue;
+                }
                 // For CyclicEdge, always allow re-execution but still guard duplicate scheduling
                 boolean isCyclic = edge instanceof CyclicEdge;
                 if (isCyclic) {
                 	if(!inProgress.add(target)) continue;
                 }
-                // TODO v0.5: MergeNode will aggregate multiple inputs properly.
                 downstream.add(
                     executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, cyclicTargets)
                 );
