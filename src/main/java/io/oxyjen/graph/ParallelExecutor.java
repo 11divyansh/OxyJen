@@ -25,6 +25,11 @@ import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.validation.DAGValidator;
 
 public class ParallelExecutor {
+	
+	public enum FailureMode {
+		FAIL_FAST,
+		CONTINUE_ON_FAILURE
+	}
 
 	private final ForkJoinPool pool;
 	private final FailureMode failureMode;
