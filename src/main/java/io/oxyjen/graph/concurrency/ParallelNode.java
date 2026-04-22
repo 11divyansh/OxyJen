@@ -5,42 +5,145 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 
+
 public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelResult<O>> {
+	
+	public enum FailureStrategy {
+        FAIL_FAST,
+        COLLECT_ERRORS
+	}
+	public static final class ParallelResult<O> {
+        private final Map<String, O> outputs;
+        private final Map<String, Throwable> errors;
+        private final List<String> completionOrder;
 
-	 public enum FailureStrategy {
-	        FAIL_FAST,
-	        COLLECT_ERRORS
-	    }
+        ParallelResult(
+                Map<String, O> outputs,
+                Map<String, Throwable> errors,
+                List<String> completionOrder
+        ) {
+            this.outputs = Collections.unmodifiableMap(new LinkedHashMap<>(outputs));
+            this.errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
+            this.completionOrder = Collections.unmodifiableList(new ArrayList<>(completionOrder));
+        }
 
-	    public static final class ParallelResult<O> {
-	        private final Map<String, O> outputs;
-	        private final Map<String, Throwable> errors;
-	        private final List<String> completionOrder;
+        public O get(String name) { return outputs.get(name); }
+        public Map<String, O> allOutputs() { return outputs; }
+        public Map<String, Throwable> allErrors() { return errors; }
+        public boolean hasErrors() { return !errors.isEmpty(); }
+        public List<String> completionOrder() { return completionOrder; }
+    }
 
-	        ParallelResult(
-	                Map<String, O> outputs,
-	                Map<String, Throwable> errors,
-	                List<String> completionOrder
-	        ) {
-	            this.outputs = Collections.unmodifiableMap(new LinkedHashMap<>(outputs));
-	            this.errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
-	            this.completionOrder = Collections.unmodifiableList(new ArrayList<>(completionOrder));
-	        }
+    private record Task<I, O>(String name, Function<I, O> fn) {}
 
-	        public O get(String name) { return outputs.get(name); }
-	        public Map<String, O> allOutputs() { return outputs; }
-	        public Map<String, Throwable> allErrors() { return errors; }
-	        public boolean hasErrors() { return !errors.isEmpty(); }
-	        public List<String> completionOrder() { return completionOrder; }
-	    }
+    private final String name;
+    private final List<Task<I, O>> tasks;
+    private final long timeoutMs;
+    private final FailureStrategy failureStrategy;
+    private final ExecutorService executor;
+    private final Semaphore limiter;
 
-		@Override
-		public ParallelResult process(I input, NodeContext context) {
-			// TODO Auto-generated method stub
-			return null;
-		}
+    private ParallelNode(
+            String name,
+            List<Task<I, O>> tasks,
+            long timeoutMs,
+            FailureStrategy failureStrategy,
+            ExecutorService executor,
+            int maxConcurrency
+    ) {
+        this.name = name;
+        this.tasks = List.copyOf(tasks);
+        this.timeoutMs = timeoutMs;
+        this.failureStrategy = failureStrategy;
+        this.executor = executor;
+        this.limiter = new Semaphore(maxConcurrency);
+    }
+
+    @Override
+    public ParallelResult<O> process(I input, NodeContext context) {
+        context.getLogger().info("[ParallelNode:" + name + "] Starting " + tasks.size() + " tasks");
+        Map<String, O> outputs = new ConcurrentHashMap<>();
+        Map<String, Throwable> errors = new ConcurrentHashMap<>();
+        List<String> completionOrder = Collections.synchronizedList(new ArrayList<>());
+        Map<String, CompletableFuture<O>> futures = new LinkedHashMap<>();
+        for (Task<I, O> task : tasks) {
+            CompletableFuture<O> future = CompletableFuture.supplyAsync(() -> {
+                boolean acquired = false;
+                try {
+                    limiter.acquire();
+                    acquired = true;
+                    return task.fn().apply(input);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                } finally {
+                    if (acquired) limiter.release();
+                }
+            }, executor);
+
+            futures.put(task.name(), future);
+        }
+        List<CompletableFuture<Void>> collectors = new ArrayList<>();
+        for (var entry : futures.entrySet()) {
+            String taskName = entry.getKey();
+            CompletableFuture<O> future = entry.getValue();
+            collectors.add(
+                future.handle((result, ex) -> {
+                    if (ex != null) {
+                        Throwable cause = (ex instanceof CompletionException)
+                                ? ex.getCause()
+                                : ex;
+                        if (failureStrategy == FailureStrategy.FAIL_FAST) {
+                            cancelAll(futures);
+                            throw new CompletionException(cause);
+                        } else {
+                            errors.put(taskName, cause);
+                        }
+                    } else {
+                        outputs.put(taskName, result);
+                    }
+
+                    completionOrder.add(taskName);
+                    return null;
+                })
+            );
+        }
+        CompletableFuture<Void> all =
+                CompletableFuture.allOf(collectors.toArray(new CompletableFuture[0]))
+                        .orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            all.join();
+        } catch (CompletionException e) {
+            cancelAll(futures);
+
+            if (failureStrategy == FailureStrategy.FAIL_FAST) {
+                throw new RuntimeException("[ParallelNode:" + name + "] failed", e.getCause());
+            }
+        }
+        context.getLogger().info(
+                "[ParallelNode:" + name + "] Done. success=" + outputs.size() +
+                " errors=" + errors.size()
+        );
+        return new ParallelResult<>(outputs, errors, completionOrder);
+    }
+
+    private void cancelAll(Map<String, ? extends CompletableFuture<?>> futures) {
+        futures.values().forEach(f -> f.cancel(true));
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
 }
