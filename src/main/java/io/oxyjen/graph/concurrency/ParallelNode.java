@@ -2,13 +2,17 @@ package io.oxyjen.graph.concurrency;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -145,5 +149,65 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
     @Override
     public String getName() {
         return name;
+    }
+    public static <I, O> Builder<I, O> builder() {
+        return new Builder<>();
+    }
+
+    public static class Builder<I, O> {
+        private final List<Task<I, O>> tasks = new ArrayList<>();
+        private long timeoutMs = 30_000;
+        private FailureStrategy failureStrategy = FailureStrategy.FAIL_FAST;
+        private ExecutorService executor = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors()
+        );
+        private int maxConcurrency = Runtime.getRuntime().availableProcessors();
+
+        public Builder<I, O> task(String name, Function<I, O> fn) {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(fn);
+            tasks.add(new Task<>(name, fn));
+            return this;
+        }
+
+        public Builder<I, O> timeout(long duration, TimeUnit unit) {
+            this.timeoutMs = unit.toMillis(duration);
+            return this;
+        }
+
+        public Builder<I, O> failureStrategy(FailureStrategy strategy) {
+            this.failureStrategy = strategy;
+            return this;
+        }
+
+        public Builder<I, O> executor(ExecutorService executor) {
+            this.executor = executor;
+            return this;
+        }
+
+        public Builder<I, O> maxConcurrency(int max) {
+            this.maxConcurrency = max;
+            return this;
+        }
+
+        public ParallelNode<I, O> build(String name) {
+            if (tasks.isEmpty()) {
+                throw new IllegalStateException("ParallelNode must have at least one task");
+            }
+            Set<String> names = new HashSet<>();
+            for (Task<I, O> t : tasks) {
+                if (!names.add(t.name())) {
+                    throw new IllegalStateException("Duplicate task name: " + t.name());
+                }
+            }
+            return new ParallelNode<>(
+                    name,
+                    tasks,
+                    timeoutMs,
+                    failureStrategy,
+                    executor,
+                    maxConcurrency
+            );
+        }
     }
 }
