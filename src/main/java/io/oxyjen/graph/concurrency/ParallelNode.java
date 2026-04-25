@@ -12,13 +12,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.ExecutionRuntime;
 
 /**
 * Executes a fixed set of {@link NodePlugin}s concurrently, all receiving the same input.
@@ -38,10 +38,6 @@ import io.oxyjen.core.NodePlugin;
 */
 public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelResult<O>> {
 	
-	public enum FailureStrategy {
-        FAIL_FAST,
-        COLLECT_ERRORS
-	}
 	public static final class ParallelResult<O> {
         private final Map<String, O> outputs;
         private final Map<String, Throwable> errors;
@@ -58,10 +54,21 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         }
 
         public O get(String name) { return outputs.get(name); }
+        public O getOrDefault(String name, O def) { return outputs.getOrDefault(name, def); }
+        public boolean succeeded(String name) { return outputs.containsKey(name); }
+        public boolean failed(String name) { return errors.containsKey(name); }
+        public Throwable getError(String name) { return errors.get(name); }
         public Map<String, O> allOutputs() { return outputs; }
         public Map<String, Throwable> allErrors() { return errors; }
         public boolean hasErrors() { return !errors.isEmpty(); }
         public List<String> completionOrder() { return completionOrder; }
+        public int successCount() { return outputs.size(); }
+        public int errorCount() { return errors.size(); }
+        @Override
+        public String toString() {
+            return "ParallelResult{succeeded=" + outputs.keySet()
+                + ", failed=" + errors.keySet() + "}";
+        }
     }
 
     private record Task<I, O>(String name, Function<I, O> fn) {}
@@ -69,28 +76,31 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
     private final String name;
     private final List<Task<I, O>> tasks;
     private final long timeoutMs;
-    private final FailureStrategy failureStrategy;
-    private final ExecutorService executor;
-    private final Semaphore limiter;
 
     private ParallelNode(
             String name,
             List<Task<I, O>> tasks,
-            long timeoutMs,
-            FailureStrategy failureStrategy,
-            ExecutorService executor,
-            int maxConcurrency
+            long timeoutMs
     ) {
         this.name = name;
         this.tasks = List.copyOf(tasks);
         this.timeoutMs = timeoutMs;
-        this.failureStrategy = failureStrategy;
-        this.executor = executor;
-        this.limiter = new Semaphore(maxConcurrency);
     }
 
     @Override
     public ParallelResult<O> process(I input, NodeContext context) {
+    	ExecutionRuntime runtime = context.getRuntime();
+        if (runtime == null) {
+            context.getLogger().warning(
+                "[ParallelNode:" + name + "] No ExecutionRuntime in context. " +
+                "Running tasks sequentially. Use ParallelExecutor for concurrent execution."
+            );
+            return runSequential(input, context);
+        }
+        ExecutorService executor = runtime.getExecutor();
+        Semaphore limiter = runtime.getLimiter();
+        ExecutionRuntime.FailureMode failureMode = runtime.getFailureMode();
+        long timeout = timeoutMs > 0 ? timeoutMs : runtime.getDefaultTimeoutMs();
         context.getLogger().info("[ParallelNode:" + name + "] Starting " + tasks.size() + " tasks");
         Map<String, O> outputs = new ConcurrentHashMap<>();
         Map<String, Throwable> errors = new ConcurrentHashMap<>();
@@ -110,7 +120,6 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
                     if (acquired) limiter.release();
                 }
             }, executor);
-
             futures.put(task.name(), future);
         }
         List<CompletableFuture<Void>> collectors = new ArrayList<>();
@@ -123,7 +132,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
                         Throwable cause = (ex instanceof CompletionException)
                                 ? ex.getCause()
                                 : ex;
-                        if (failureStrategy == FailureStrategy.FAIL_FAST) {
+                        if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
                             cancelAll(futures);
                             throw new CompletionException(cause);
                         } else {
@@ -132,7 +141,6 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
                     } else {
                         outputs.put(taskName, result);
                     }
-
                     completionOrder.add(taskName);
                     return null;
                 })
@@ -145,8 +153,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
             all.join();
         } catch (CompletionException e) {
             cancelAll(futures);
-
-            if (failureStrategy == FailureStrategy.FAIL_FAST) {
+            if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
                 throw new RuntimeException("[ParallelNode:" + name + "] failed", e.getCause());
             }
         }
@@ -157,6 +164,21 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         return new ParallelResult<>(outputs, errors, completionOrder);
     }
 
+    private ParallelResult<O> runSequential(I input, NodeContext context) {
+        Map<String, O> outputs = new LinkedHashMap<>();
+        Map<String, Throwable> errors = new LinkedHashMap<>();
+        List<String> order = new ArrayList<>();
+ 
+        for (Task<I, O> task : tasks) {
+            try {
+                outputs.put(task.name(), task.fn().apply(input));
+            } catch (Exception e) {
+                errors.put(task.name(), e);
+            }
+            order.add(task.name());
+        }
+        return new ParallelResult<>(outputs, errors, order);
+    }
     private void cancelAll(Map<String, ? extends CompletableFuture<?>> futures) {
         futures.values().forEach(f -> f.cancel(true));
     }
@@ -171,12 +193,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
 
     public static class Builder<I, O> {
         private final List<Task<I, O>> tasks = new ArrayList<>();
-        private long timeoutMs = 30_000;
-        private FailureStrategy failureStrategy = FailureStrategy.FAIL_FAST;
-        private ExecutorService executor = Executors.newFixedThreadPool(
-                Runtime.getRuntime().availableProcessors()
-        );
-        private int maxConcurrency = Runtime.getRuntime().availableProcessors();
+        private long timeoutMs = 0;
 
         public Builder<I, O> task(String name, Function<I, O> fn) {
             Objects.requireNonNull(name);
@@ -187,21 +204,6 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
 
         public Builder<I, O> timeout(long duration, TimeUnit unit) {
             this.timeoutMs = unit.toMillis(duration);
-            return this;
-        }
-
-        public Builder<I, O> failureStrategy(FailureStrategy strategy) {
-            this.failureStrategy = strategy;
-            return this;
-        }
-
-        public Builder<I, O> executor(ExecutorService executor) {
-            this.executor = executor;
-            return this;
-        }
-
-        public Builder<I, O> maxConcurrency(int max) {
-            this.maxConcurrency = max;
             return this;
         }
 
@@ -218,10 +220,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
             return new ParallelNode<>(
                     name,
                     tasks,
-                    timeoutMs,
-                    failureStrategy,
-                    executor,
-                    maxConcurrency
+                    timeoutMs
             );
         }
     }
