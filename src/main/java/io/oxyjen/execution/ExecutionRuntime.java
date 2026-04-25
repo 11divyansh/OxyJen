@@ -14,7 +14,8 @@ import java.util.concurrent.TimeUnit;
  * - How many tasks can run simultaneously (Semaphore)
  * - What happens when a task fails (FailureMode)
  *
- * All nodes that need to submit async work - {@link io.oxyjen.graph.concurrency.ParallelNode}, - read from this runtime
+ * All nodes that need to submit async work - {@link io.oxyjen.graph.concurrency.ParallelNode},
+ * {@link io.oxyjen.graph.concurrency.MapNode}, etc. — read from this runtime
  * instead of managing their own pools and limiters.
  *
  * This eliminates:
@@ -36,7 +37,12 @@ public final class ExecutionRuntime {
          * Isolate failing tasks, let the rest complete, surface all errors in the result.
          * Use when partial results are still valuable (e.g. batch LLM enrichment).
          */
-        COLLECT_ERRORS
+        COLLECT_ERRORS,
+        
+        /**
+         * Continue execution, don't run downstream
+         */
+        SKIP_FAILED
     }
  
     private final ExecutorService executor;

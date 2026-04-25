@@ -5,12 +5,10 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
@@ -18,6 +16,7 @@ import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
@@ -26,31 +25,19 @@ import io.oxyjen.graph.validation.DAGValidator;
 
 public class ParallelExecutor {
 	
-	public enum FailureMode {
-		FAIL_FAST,
-		CONTINUE_ON_FAILURE
-	}
-
-	private final ForkJoinPool pool;
-	private final FailureMode failureMode;
-	private final Semaphore limiter;
-	private final int maxConcurrency;
+	private final ExecutionRuntime runtime;
 	 
     /** Default: uses the common pool.*/
     public ParallelExecutor() {
-        this(ForkJoinPool.commonPool(), FailureMode.FAIL_FAST, Runtime.getRuntime().availableProcessors());
+        this(ExecutionRuntime.defaultRuntime());
     }
  
     /** Custom thread pool for controlled parallelism. */
-    public ParallelExecutor(ForkJoinPool pool, FailureMode failureMode) {
-        this(pool, failureMode, Runtime.getRuntime().availableProcessors());
+    public ParallelExecutor(ExecutionRuntime runtime) {
+        this.runtime = runtime;
     }
-    public ParallelExecutor(ForkJoinPool pool, FailureMode failureMode, int maxConcurrency) {
-        this.pool = Objects.requireNonNull(pool);
-        this.failureMode = Objects.requireNonNull(failureMode);
-        this.maxConcurrency = maxConcurrency;
-        this.limiter = new Semaphore(maxConcurrency);
-    }
+   
+    public record NodeFailure(String nodeName, Throwable error) {}
     /**
      * Runs the graph and returns outputs from all terminal nodes, keyed by node name.
      *
@@ -61,6 +48,7 @@ public class ParallelExecutor {
      */
     public Map<String, Object> run(Graph graph, Object input, NodeContext context) {
         DAGValidator.validate(graph);
+        context.setRuntime(runtime);
         context.setMetadata("graphName", graph.getName());
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
@@ -143,6 +131,7 @@ public class ParallelExecutor {
     ) {
         return CompletableFuture.supplyAsync(() -> {
         	boolean acquired = false;
+        	Semaphore limiter = runtime.getLimiter();
         	try {
         		limiter.acquire();
         		acquired = true;
@@ -163,20 +152,41 @@ public class ParallelExecutor {
                 try { context.getExceptionHandler().handleException((NodePlugin<Object,Object>)node, e, context); } catch (Exception ignored) {}
                 try { ((NodePlugin<Object,Object>)node).onError(e, context); } catch (Exception ignored) {}
                 context.setMetadata("failed:" + node.getName(), true);
-                if (failureMode == FailureMode.FAIL_FAST) {
-                	throw new RuntimeException("Node failed: " + node.getName(), e);
+                ExecutionRuntime runtime = context.getRuntime();
+                ExecutionRuntime.FailureMode mode = runtime.getFailureMode();
+                switch (mode) {
+                    case FAIL_FAST -> {
+                        // stop everything
+                        throw new RuntimeException("Node failed: " + node.getName(), e);
+                    }
+
+                    case COLLECT_ERRORS -> {
+                        // ontinue graph but preserve error
+                    	NodeFailure failure = new NodeFailure(node.getName(), e);
+                        nodeOutputs.put(node.getName(), failure);
+                        return failure;
+                    }
+                    
+                    case SKIP_FAILED -> {
+                        // skip this node's downstream
+                        return null;
+                    }
                 }
-                // CONTINUE_ON_ERROR mode -> skip downstream execution
-                return null;
+                return null; // fallback
             } finally {
             	if (acquired) {
             		limiter.release();
             	}
             	inProgress.remove(node);
             }           
-        }, pool).thenCompose(output -> {
+        }, runtime.getExecutor()).thenCompose(output -> {
         	if (output == null) {
         		return CompletableFuture.completedFuture(null);
+        	}
+        	if (output instanceof NodeFailure failure) {
+        	    context.getLogger().warning(
+        	        "[DAG] Node failed but continuing: " + failure.nodeName()
+        	    );
         	}
         	if (output instanceof BranchNode.RoutedResult routed) {
         		 context.getLogger().info(
@@ -229,7 +239,12 @@ public class ParallelExecutor {
             boolean hasCyclic = false;
             boolean shouldContinueLoop = false;
             for (Edge edge : graph.getEdgesFrom(node)) {
-            	boolean decision = edge.shouldTraverse(output, context);
+            	boolean decision;
+            	if (output instanceof NodeFailure failure) {
+            		decision = false;
+            	} else {
+            		decision = edge.shouldTraverse(output, context);
+            	}
                 decisions.put(edge, decision);
                 if (edge instanceof CyclicEdge) {
                     hasCyclic = true;
@@ -254,6 +269,8 @@ public class ParallelExecutor {
                 anyTraversed = true;
                 NodePlugin<?, ?> target = edge.getTarget();
                 if (target instanceof MergeNode merge) {
+                	// MergeNode may receive NodeFailure as contribution
+                	// future update: make MergeNode handle success + failure separately
                     merge.contribute(node.getName(), output, context);
                     if (merge.getMissingContributors(context).isEmpty()) {
                         if (inProgress.add(merge)) { //prevent duplicate execution
