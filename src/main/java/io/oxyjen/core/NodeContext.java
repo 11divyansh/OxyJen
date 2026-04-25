@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 
 import io.oxyjen.core.exceptions.ExceptionHandler;
 import io.oxyjen.core.logging.OxyLogger;
+import io.oxyjen.execution.ExecutionRuntime;
 
 /**
  * Shared execution context for all nodes in an Oxyjen graph.
@@ -23,6 +24,40 @@ public class NodeContext {
     private volatile OxyLogger oxyjenLogger;
     private volatile ExceptionHandler exceptionHandler;
 
+    // v0.5: single shared runtime injected by ParallelExecutor before traversal
+    private ExecutionRuntime runtime;
+    
+    /**
+     * Returns the shared {@link ExecutionRuntime} for this graph execution.
+     *
+     * Set by {@link io.oxyjen.graph.ParallelExecutor} before traversal begins.
+     * Nodes that need to submit async work should read the executor, limiter,
+     * and failure mode from here rather than managing their own.
+     *
+     * Returns null if called outside a ParallelExecutor context (e.g. sequential Executor).
+     */
+    public ExecutionRuntime getRuntime() {
+        return runtime;
+    }
+ 
+    /**
+     * Injected by {@link io.oxyjen.graph.ParallelExecutor} at the start of {@code run()}.
+     * Should not be called by user code.
+     */
+    public void setRuntime(ExecutionRuntime runtime) {
+    	if (this.runtime != null) {
+            throw new IllegalStateException("Runtime already set.");
+        }
+        this.runtime = runtime;
+    }
+ 
+    /**
+     * Returns true if a runtime has been injected (i.e. running under ParallelExecutor).
+     * Nodes can use this to decide whether to submit async work or run inline.
+     */
+    public boolean hasRuntime() {
+        return runtime != null;
+    }
     /**
      * Stores a key-value pair in the shared context data.
      */
