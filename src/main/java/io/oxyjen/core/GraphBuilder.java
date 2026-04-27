@@ -11,6 +11,7 @@ import java.util.function.Function;
 import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
+import io.oxyjen.graph.edges.FailureEdge;
 
 /**
  * Builder pattern for constructing {@link Graph} instances.
@@ -102,6 +103,16 @@ public class GraphBuilder {
         }
         return this;
     }
+    
+    /** To create failure aware edges*/
+    public GraphBuilder connectOnFailure(String from, String to) {
+        NodePlugin<?, ?> source = getNode(from);
+        NodePlugin<?, ?> target = getNode(to);
+
+        edges.add(new FailureEdge(source, target));
+        return this;
+    }
+    
     /** To explicitly allow cycles, and restrain user from creating infinite loop*/
     public GraphBuilder allowCycles() {
         this.allowCycles = true;

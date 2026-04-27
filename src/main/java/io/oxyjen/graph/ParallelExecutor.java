@@ -161,7 +161,7 @@ public class ParallelExecutor {
                     }
 
                     case COLLECT_ERRORS -> {
-                        // ontinue graph but preserve error
+                        // continue graph but preserve error
                     	NodeFailure failure = new NodeFailure(node.getName(), e);
                         nodeOutputs.put(node.getName(), failure);
                         return failure;
@@ -241,7 +241,7 @@ public class ParallelExecutor {
             for (Edge edge : graph.getEdgesFrom(node)) {
             	boolean decision;
             	if (output instanceof NodeFailure failure) {
-            		decision = false;
+            		 decision = edge.shouldTraverseFailure(failure, context);
             	} else {
             		decision = edge.shouldTraverse(output, context);
             	}
