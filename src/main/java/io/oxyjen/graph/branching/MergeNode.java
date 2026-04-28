@@ -16,6 +16,7 @@ import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.ParallelExecutor.NodeFailure;
 
 /**
  * A fan-in node that aggregates results from multiple parallel upstream branches.
@@ -44,7 +45,8 @@ public class MergeNode implements NodePlugin<Object, Object> {
  
     // Internal per-execution state
     private static class MergeState {
-        final Map<String, Object> contributions = new ConcurrentHashMap<>();
+    	final Map<String, Object> success = new ConcurrentHashMap<>();
+    	final Map<String, Throwable> errors = new ConcurrentHashMap<>();
         final CountDownLatch latch;
         MergeState(int expected) {
             this.latch = new CountDownLatch(expected);
@@ -102,16 +104,31 @@ public class MergeNode implements NodePlugin<Object, Object> {
             return;
         }
  
-        if (state.contributions.putIfAbsent(contributorName, value) != null) {
-            context.getLogger().warning(
-                "[MergeNode:" + name + "] Duplicate contribution from: " + contributorName
+        if (value instanceof NodeFailure failure) {
+        	if (state.errors.putIfAbsent(contributorName, failure.error()) != null) {
+        		context.getLogger().warning(
+                        "[MergeNode:" + name + "] Duplicate failure from: " + contributorName
+                );
+                return;
+        	}
+        	context.getLogger().warning(
+                    "[MergeNode:" + name + "] Received FAILURE from: " + contributorName
+                    + " (" + (state.success.size() + state.errors.size())
+                    + "/" + expectedContributors.size() + " arrived)"
             );
-            return;
+        } else {
+        	if (state.success.putIfAbsent(contributorName, value) != null) {
+                context.getLogger().warning(
+                    "[MergeNode:" + name + "] Duplicate contribution from: " + contributorName
+                );
+                return;
+            }
+            context.getLogger().info(
+                "[MergeNode:" + name + "] Received SUCCESS from: " + contributorName
+                    + " (" + (state.success.size() + state.errors.size())
+                    + "/" + expectedContributors.size() + " arrived)"
+            );
         }
-        context.getLogger().info(
-            "[MergeNode:" + name + "] Received contribution from: " + contributorName
-                + " (" + state.contributions.size() + "/" + expectedContributors.size() + " arrived)"
-        );
         state.latch.countDown();
     }
  
@@ -149,17 +166,19 @@ public class MergeNode implements NodePlugin<Object, Object> {
 	         boolean completed = state.latch.await(timeoutMs, TimeUnit.MILLISECONDS);
 	         if (!completed) {
 	             Set<String> missing = new LinkedHashSet<>(expectedContributors);
-	             missing.removeAll(state.contributions.keySet());
+	             missing.removeAll(state.success.keySet());
+	             missing.removeAll(state.errors.keySet());
 	             throw new MergeTimeoutException(name, missing, timeoutMs);
 	         }
 	     } catch (InterruptedException e) {
 	         Thread.currentThread().interrupt();
 	         throw new RuntimeException("[MergeNode:" + name + "] interrupted while waiting for contributions", e);
 	     }
-	     context.getLogger().info("[MergeNode:" + name + "] All contributions received - merging.");
-	     return mergeFunction.apply(
-	         Collections.unmodifiableMap(state.contributions)
+	     context.getLogger().info("[MergeNode:" + name + "] All contributions received - merging." +
+	    		 "success=" + state.success.size() +
+	    	     ", errors=" + state.errors.size()
 	     );
+	     return new MergeResult(state.success, state.errors);
 	}
 	
 	@Override
@@ -168,23 +187,24 @@ public class MergeNode implements NodePlugin<Object, Object> {
     }
 	
 	/** Returns an immutable snapshot of contributions received so far. */
-	public Map<String, Object> getContributions(NodeContext context) {
+	public MergeResult getContributions(NodeContext context) {
 		MergeState state = getState(context);
-	    return Collections.unmodifiableMap(state.contributions);
+	    return new MergeResult(state.success, state.errors);
 	}
 	 
 	/** Returns the names of contributors still outstanding. */
 	public Set<String> getMissingContributors(NodeContext context) {
 		MergeState state = getState(context);
 	    Set<String> missing = new LinkedHashSet<>(expectedContributors);
-	    missing.removeAll(state.contributions.keySet());
+	    missing.removeAll(state.success.keySet());
+	    missing.removeAll(state.errors.keySet());
 	    return Collections.unmodifiableSet(missing);
 	}
 	
 	public static final class Builder {
 
         private final Set<String> expectedContributors = new LinkedHashSet<>();
-        private Function<Map<String, Object>, Object> mergeFunction;
+        private Function<Map<String, Object>, Object> mergeFunction; /** deprecated */
         private long timeoutMs = 30_000;
 
         /**
@@ -225,6 +245,43 @@ public class MergeNode implements NodePlugin<Object, Object> {
             return new MergeNode(name, expectedContributors, mergeFunction, timeoutMs);
         }
     }
+	
+	public class MergeResult {
+
+	    private final Map<String, Object> success;
+	    private final Map<String, Throwable> errors;
+
+	    public MergeResult(
+	            Map<String, Object> success,
+	            Map<String, Throwable> errors
+	    ) {
+	        this.success = Collections.unmodifiableMap(new LinkedHashMap<>(success));
+	        this.errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
+	    }
+
+	    public Map<String, Object> getSuccess() {
+	        return success;
+	    }
+
+	    public Map<String, Throwable> getErrors() {
+	        return errors;
+	    }
+
+	    public boolean hasErrors() {
+	        return !errors.isEmpty();
+	    }
+
+	    @SuppressWarnings("unchecked")
+	    public <T> T get(String key) {
+	        return (T) success.get(key);
+	    }
+
+	    @Override
+	    public String toString() {
+	        return "MergeResult{success=" + success.keySet() +
+	               ", errors=" + errors.keySet() + "}";
+	    }
+	}
 	
 	public static class MergeTimeoutException extends RuntimeException {
         private final Set<String> missingContributors;
