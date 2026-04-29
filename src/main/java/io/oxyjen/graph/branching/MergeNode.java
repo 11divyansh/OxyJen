@@ -78,8 +78,9 @@ public class MergeNode implements NodePlugin<Object, Object> {
         String key = stateKey(name);
         MergeState state = context.get(key);
         if (state == null) {
-            state = new MergeState(expectedContributors.size());
-            context.set(key, state);
+            throw new IllegalStateException(
+                "MergeNode [" + name + "] not registered before execution"
+            );
         }
         return state;
     }
@@ -103,7 +104,9 @@ public class MergeNode implements NodePlugin<Object, Object> {
             );
             return;
         }
- 
+        context.getLogger().info(
+        	    "[DEBUG] Contribute called for: " + contributorName + " → " + name
+        	);
         if (value instanceof NodeFailure failure) {
         	if (state.errors.putIfAbsent(contributorName, failure.error()) != null) {
         		context.getLogger().warning(

@@ -55,17 +55,19 @@ public class ParallelExecutor {
         Map<String, Object> nodeOutputs = new ConcurrentHashMap<>();
         // register merge nodes
         for (NodePlugin<?, ?> node : graph.getNodes()) {
-            if (node instanceof MergeNode merge) {
+        	NodePlugin<?, ?> actual = node.unwrap();
+            if (actual instanceof MergeNode merge) {
                 merge.register(context);
             }
         }
+        Set<NodePlugin<?, ?>> scheduled = ConcurrentHashMap.newKeySet();
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
         List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
-        	if (inProgress.add(root))
+        	if (scheduled.add(root))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, cyclicTargets)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
@@ -127,6 +129,7 @@ public class ParallelExecutor {
             NodeContext context,
             Map<String, Object> nodeOutputs,
             Set<NodePlugin<?, ?>> inProgress,
+            Set<NodePlugin<?, ?>> scheduled,
             Set<NodePlugin<?, ?>> cyclicTargets
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -205,6 +208,7 @@ public class ParallelExecutor {
                      context,
                      nodeOutputs,
                      inProgress,
+                     scheduled,
                      cyclicTargets
                  );
         	}
@@ -226,6 +230,7 @@ public class ParallelExecutor {
         	                context,
         	                nodeOutputs,
         	                inProgress,
+        	                scheduled,
         	                cyclicTargets
         	            )
         	        );
@@ -267,36 +272,55 @@ public class ParallelExecutor {
                     continue;
                 } 
                 anyTraversed = true;
-                NodePlugin<?, ?> target = edge.getTarget();
+                NodePlugin<?, ?> target = edge.getTarget().unwrap();
                 if (target instanceof MergeNode merge) {
                 	// MergeNode may receive NodeFailure as contribution
                 	// future update: make MergeNode handle success + failure separately
+                	context.getLogger().info(
+                		    "[DEBUG] Edge: " + node.getName() + " -> " + target.getName() +
+                		    " | target class = " + target.getClass().getName()
+                		);
                     merge.contribute(node.getName(), output, context);
-                    if (merge.getMissingContributors(context).isEmpty()) {
-                        if (inProgress.add(merge)) { //prevent duplicate execution
-                            downstream.add(
-                                executeNodeAsync(
-                                    merge,
-                                    null, // MergeNode doesn't need input
-                                    graph,
-                                    context,
-                                    nodeOutputs,
-                                    inProgress,
-                                    cyclicTargets
-                                )
-                            );
-                        }
+                    if (scheduled.add(merge)) { //prevent duplicate execution
+                        downstream.add(
+                            executeNodeAsync(
+                                merge,
+                                null, // MergeNode doesn't need input
+                                graph,
+                                context,
+                                nodeOutputs,
+                                inProgress,
+                                scheduled,
+                                cyclicTargets
+                            )
+                        );
                     }
                     continue;
                 }
                 // For CyclicEdge, always allow re-execution but still guard duplicate scheduling
                 boolean isCyclic = edge instanceof CyclicEdge;
                 if (isCyclic) {
-                	if(!inProgress.add(target)) continue;
+                	if(!inProgress.add(target)) {
+                		downstream.add(
+                	        executeNodeAsync(
+                	            target,
+                	            output,
+                	            graph,
+                	            context,
+                	            nodeOutputs,
+                	            inProgress,
+                	            scheduled,
+                	            cyclicTargets
+                	    ));
+                		continue;
+                	}
+                } else {
+                	if (scheduled.add(target)) {
+                		downstream.add(
+                			executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets)
+                		);
+                	}
                 }
-                downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, cyclicTargets)
-                );
             }
             if (!anyTraversed && !graph.getEdgesFrom(node).isEmpty()) {
                 context.getLogger().warning(

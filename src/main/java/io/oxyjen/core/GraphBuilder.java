@@ -239,4 +239,8 @@ class NamedNode<I, O> implements NodePlugin<I, O> {
     public String getName() {
         return name;
     }
+    @Override
+    public NodePlugin<?, ?> unwrap() {
+        return delegate;
+    }
 }
