@@ -246,7 +246,11 @@ public class ParallelExecutor {
             for (Edge edge : graph.getEdgesFrom(node)) {
             	boolean decision;
             	if (output instanceof NodeFailure failure) {
-            		 decision = edge.shouldTraverseFailure(failure, context);
+            		if (edge.getTarget().unwrap() instanceof MergeNode) {
+            	        decision = true;
+            	    } else {
+            	        decision = edge.shouldTraverseFailure(failure, context);
+            	    }
             	} else {
             		decision = edge.shouldTraverse(output, context);
             	}
