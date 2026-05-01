@@ -76,7 +76,7 @@ class MergeNodeWithExecutor {
 	    assertEquals(2, mergeResult.getSuccess().size());
 	    assertTrue(mergeResult.getErrors().isEmpty());
 	}
-	//@Test
+	@Test
 	void shouldCollectErrorsFromFailingNodes() {
 	    NodeContext context = new NodeContext();
 
@@ -89,7 +89,7 @@ class MergeNodeWithExecutor {
 	            .addNode("B", new FailingNode("B"))
 	            .addNode("merge", merge)
 	            .connect("A", "merge")
-	            .connect("B", "merge")
+	            .connectOnFailure("B", "merge")
 	            .build();
 
 	    ParallelExecutor executor = new ParallelExecutor(
