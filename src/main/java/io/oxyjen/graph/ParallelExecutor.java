@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
@@ -79,7 +80,9 @@ public class ParallelExecutor {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Graph execution interrupted: " + graph.getName(), e);
         } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
+            Throwable cause = e;
+            while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) { cause = cause.getCause();}
+            if (cause instanceof MergeNode.MergeTimeoutException timeout) throw timeout;
             if (cause instanceof RuntimeException re) throw re;
             throw new RuntimeException("Graph execution failed: " + graph.getName(), cause);
         }
@@ -151,7 +154,10 @@ public class ParallelExecutor {
                 nodeOutputs.put(node.getName(), output);
                 return output;
             } catch (Exception e) {
-                context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
+            	if (!(e instanceof MergeNode.MergeTimeoutException)) {
+            	    context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
+            	}
+                //context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
                 try { context.getExceptionHandler().handleException((NodePlugin<Object,Object>)node, e, context); } catch (Exception ignored) {}
                 try { ((NodePlugin<Object,Object>)node).onError(e, context); } catch (Exception ignored) {}
                 context.setMetadata("failed:" + node.getName(), true);
@@ -164,6 +170,9 @@ public class ParallelExecutor {
                     }
 
                     case COLLECT_ERRORS -> {
+                    	if (node instanceof MergeNode && e instanceof MergeNode.MergeTimeoutException) {
+                            throw new CompletionException(e);
+                        }
                         // continue graph but preserve error
                     	NodeFailure failure = new NodeFailure(node.getName(), e);
                         nodeOutputs.put(node.getName(), failure);
@@ -246,11 +255,7 @@ public class ParallelExecutor {
             for (Edge edge : graph.getEdgesFrom(node)) {
             	boolean decision;
             	if (output instanceof NodeFailure failure) {
-            		if (edge.getTarget().unwrap() instanceof MergeNode) {
-            	        decision = true;
-            	    } else {
-            	        decision = edge.shouldTraverseFailure(failure, context);
-            	    }
+            		decision = edge.shouldTraverseFailure(failure, context);
             	} else {
             		decision = edge.shouldTraverse(output, context);
             	}
@@ -332,8 +337,14 @@ public class ParallelExecutor {
                 );
             }
             if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
-            return CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0]));
-        });
+            return CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0]))
+            		 .thenApply(v -> {
+            			 for (CompletableFuture<Void> f : downstream) {
+            				 f.join();
+            		     }
+            		     return null;
+            		 });
+            });
     }
     
     private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {
