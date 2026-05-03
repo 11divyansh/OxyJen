@@ -2,6 +2,7 @@ package io.oxyjen.graph.edges;
 
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
+import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 
 /**
@@ -20,5 +21,9 @@ public final class DirectEdge extends Edge {
  
     public DirectEdge(NodePlugin<?, ?> source, NodePlugin<?, ?> target) {
         super(source, target);
+    }
+    @Override
+    public boolean shouldTraverse(Object output, NodeContext context) {
+        return true; // default edges always pass
     }
 }

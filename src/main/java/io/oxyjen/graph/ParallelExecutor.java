@@ -1,7 +1,6 @@
 package io.oxyjen.graph;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,40 +53,73 @@ public class ParallelExecutor {
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
         Map<String, Object> nodeOutputs = new ConcurrentHashMap<>();
+        Set<String> scheduled = ConcurrentHashMap.newKeySet();
+        Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
+        Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
+        Set<CompletableFuture<?>> allFutures = ConcurrentHashMap.newKeySet();
+        List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
         // register merge nodes
         for (NodePlugin<?, ?> node : graph.getNodes()) {
         	NodePlugin<?, ?> actual = node.unwrap();
             if (actual instanceof MergeNode merge) {
                 merge.register(context);
+                if (scheduled.add(node.getName())) {
+                    rootFutures.add(
+                        executeNodeAsync(node, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                    );
+                }
             }
         }
-        Set<NodePlugin<?, ?>> scheduled = ConcurrentHashMap.newKeySet();
-        Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
-        Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
-        List<CompletableFuture<Void>> rootFutures = new ArrayList<>();
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
-        	if (scheduled.add(root))
+        	if (scheduled.add(root.getName()))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
             rootFutures.toArray(new CompletableFuture[0])
         );
         try {
-            allDone.get(); 
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Graph execution interrupted: " + graph.getName(), e);
-        } catch (ExecutionException e) {
+            while (true) {
+                CompletableFuture<?>[] snapshot =
+                    allFutures.toArray(new CompletableFuture[0]);
+                CompletableFuture.allOf(snapshot).join();
+                if (allFutures.size() == snapshot.length) {
+                    break;
+                }
+            }
+        } catch (CompletionException e) {
             Throwable cause = e;
-            while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) { cause = cause.getCause();}
+            while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+                    && cause.getCause() != null) {
+                cause = cause.getCause();
+            }
+
             if (cause instanceof MergeNode.MergeTimeoutException timeout) throw timeout;
             if (cause instanceof RuntimeException re) throw re;
+
             throw new RuntimeException("Graph execution failed: " + graph.getName(), cause);
         }
+        context.getLogger().info(
+        	    "[DEBUG] Terminal nodes: " +
+        	    graph.getTerminalNodes()
+        	        .stream()
+        	        .map(n -> n.getName() + " (unwrap=" + n.unwrap().getName() + ")")
+        	        .toList()
+        	);
+        context.getLogger().info(
+        	    "[DEBUG] nodeOutputs keys: " + nodeOutputs.keySet()
+        	);
         Map<String, Object> results = new LinkedHashMap<>();
         for (NodePlugin<?, ?> terminal : graph.getTerminalNodes()) {
+        	//NodePlugin<?, ?> actual = terminal.unwrap();
+        	String name = terminal.getName();
+            String unwrapName = terminal.unwrap().getName();
+        	 context.getLogger().info(
+        		        "[DEBUG] Reading terminal → name=" + name +
+        		        ", unwrap=" + unwrapName +
+        		        ", value=" + nodeOutputs.get(name)
+        		    );
             results.put(terminal.getName(), nodeOutputs.get(terminal.getName()));
         }
         if (results.isEmpty()) {
@@ -132,10 +164,11 @@ public class ParallelExecutor {
             NodeContext context,
             Map<String, Object> nodeOutputs,
             Set<NodePlugin<?, ?>> inProgress,
-            Set<NodePlugin<?, ?>> scheduled,
-            Set<NodePlugin<?, ?>> cyclicTargets
+            Set<String> scheduled,
+            Set<NodePlugin<?, ?>> cyclicTargets,
+            Set<CompletableFuture<?>> allFutures
     ) {
-        return CompletableFuture.supplyAsync(() -> {
+    	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
         	boolean acquired = false;
         	Semaphore limiter = runtime.getLimiter();
         	try {
@@ -189,162 +222,65 @@ public class ParallelExecutor {
             	if (acquired) {
             		limiter.release();
             	}
-            	inProgress.remove(node);
             }           
-        }, runtime.getExecutor()).thenCompose(output -> {
-        	if (output == null) {
-        		return CompletableFuture.completedFuture(null);
-        	}
-        	if (output instanceof NodeFailure failure) {
-        	    context.getLogger().warning(
-        	        "[DAG] Node failed but continuing: " + failure.nodeName()
-        	    );
-        	}
-        	if (output instanceof BranchNode.RoutedResult routed) {
-        		 context.getLogger().info(
-        				 "[BranchNode] Routing -> " + routed.nextNode()
-                 );
-                 NodePlugin<?, ?> target = graph.findNodeByName(routed.nextNode());
-                 if (target == null) {
-                	 throw new IllegalStateException(
-                			 "BranchNode [" + node.getName() + "] routed to unknown node: " + routed.nextNode()
-                     );
-                 }
-                 return executeNodeAsync(
-                     target,
-                     routed.output(),
-                     graph,
-                     context,
-                     nodeOutputs,
-                     inProgress,
-                     scheduled,
-                     cyclicTargets
-                 );
-        	}
-        	if (output instanceof RouterNode.RoutedResult routed) {
-        		nodeOutputs.put(node.getName(), routed.routes());
-        	    List<CompletableFuture<Void>> futures = new ArrayList<>();
-        	    for (Map.Entry<String, Object> entry : routed.routes().entrySet()) {
-        	        NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
-        	        if (target == null) {
-        	            throw new IllegalStateException(
-        	                "RouterNode routed to unknown node: " + entry.getKey()
-        	            );
-        	        }
-        	        futures.add(
-        	            executeNodeAsync(
-        	                target,
-        	                entry.getValue(),
-        	                graph,
-        	                context,
-        	                nodeOutputs,
-        	                inProgress,
-        	                scheduled,
-        	                cyclicTargets
-        	            )
-        	        );
-        	    }
-        	    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        	}
-        	boolean anyTraversed = false;
-            // Fan-out: evaluate all outgoing edges and schedule eligible targets
-            List<CompletableFuture<Void>> downstream = new ArrayList<>(); 
-            Map<Edge, Boolean> decisions = new IdentityHashMap<>();
-            boolean hasCyclic = false;
-            boolean shouldContinueLoop = false;
-            for (Edge edge : graph.getEdgesFrom(node)) {
-            	boolean decision;
-            	if (output instanceof NodeFailure failure) {
-            		decision = edge.shouldTraverseFailure(failure, context);
-            	} else {
-            		decision = edge.shouldTraverse(output, context);
-            	}
-                decisions.put(edge, decision);
-                if (edge instanceof CyclicEdge) {
-                    hasCyclic = true;
-                    if (decision) {
-                        shouldContinueLoop = true;
+        }, runtime.getExecutor()).thenAccept(output -> {
+            if (output == null) {
+                inProgress.remove(node);
+                return;
+            }
+            if (output instanceof NodeFailure failure) {
+                context.getLogger().warning(
+                    "[DAG] Node failed but continuing: " + failure.nodeName()
+                );
+            }
+            if (output instanceof BranchNode.RoutedResult routed) {
+                NodePlugin<?, ?> target = graph.findNodeByName(routed.nextNode());
+                executeNodeAsync(target, routed.output(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
+                inProgress.remove(node);
+                return;
+            }
+            if (output instanceof RouterNode.RoutedResult routed) {
+                for (Map.Entry<String, Object> entry : routed.routes().entrySet()) {
+                    NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
+                    if (scheduled.add(target.getName())) {
+                        executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
                     }
                 }
+                inProgress.remove(node);
+                return;
             }
+
+            List<CompletableFuture<Void>> downstream = new ArrayList<>();
             for (Edge edge : graph.getEdgesFrom(node)) {
-            	if (hasCyclic) {
-            		if (shouldContinueLoop && !(edge instanceof CyclicEdge)) {
-                    	continue;
-                	}
-            		if (!shouldContinueLoop && edge instanceof CyclicEdge) {
-                    	continue;
-                	}
-            	}
-                if (!decisions.get(edge)) {
-                    context.getLogger().info("[DAG] Skipping edge: " + edge.getLabel());
-                    continue;
-                } 
-                anyTraversed = true;
+                boolean decision = (output instanceof NodeFailure failure)
+                        ? edge.shouldTraverseFailure(failure, context)
+                        : edge.shouldTraverse(output, context);
+                if (!decision) continue;
                 NodePlugin<?, ?> target = edge.getTarget().unwrap();
-                if (target instanceof MergeNode merge) {
-                	// MergeNode may receive NodeFailure as contribution
-                	// future update: make MergeNode handle success + failure separately
-                	context.getLogger().info(
-                		    "[DEBUG] Edge: " + node.getName() + " -> " + target.getName() +
-                		    " | target class = " + target.getClass().getName()
-                		);
+                if (target instanceof MergeNode merge && !(node instanceof MergeNode)) {
                     merge.contribute(node.getName(), output, context);
-                    if (scheduled.add(merge)) { //prevent duplicate execution
+
+                    if (scheduled.add(merge.getName())) {
                         downstream.add(
-                            executeNodeAsync(
-                                merge,
-                                null, // MergeNode doesn't need input
-                                graph,
-                                context,
-                                nodeOutputs,
-                                inProgress,
-                                scheduled,
-                                cyclicTargets
-                            )
+                            executeNodeAsync(merge, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
                         );
                     }
                     continue;
                 }
-                // For CyclicEdge, always allow re-execution but still guard duplicate scheduling
-                boolean isCyclic = edge instanceof CyclicEdge;
-                if (isCyclic) {
-                	if(!inProgress.add(target)) {
-                		downstream.add(
-                	        executeNodeAsync(
-                	            target,
-                	            output,
-                	            graph,
-                	            context,
-                	            nodeOutputs,
-                	            inProgress,
-                	            scheduled,
-                	            cyclicTargets
-                	    ));
-                		continue;
-                	}
-                } else {
-                	if (scheduled.add(target)) {
-                		downstream.add(
-                			executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets)
-                		);
-                	}
+                if (scheduled.add(target.getName())) {
+                    downstream.add(
+                        executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                    );
                 }
             }
-            if (!anyTraversed && !graph.getEdgesFrom(node).isEmpty()) {
-                context.getLogger().warning(
-                    "[DAG] No route matched for node: " + node.getName()
-                );
+            if (!downstream.isEmpty()) {
+                CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0])).join();
             }
-            if (downstream.isEmpty()) return CompletableFuture.completedFuture(null);
-            return CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0]))
-            		 .thenApply(v -> {
-            			 for (CompletableFuture<Void> f : downstream) {
-            				 f.join();
-            		     }
-            		     return null;
-            		 });
-            });
+            inProgress.remove(node);
+        });
+    	allFutures.add(future);
+    	return future;
+        
     }
     
     private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {
