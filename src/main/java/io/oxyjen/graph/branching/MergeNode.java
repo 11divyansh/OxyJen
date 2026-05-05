@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -48,6 +49,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
     private static class MergeState {
     	final Map<String, Object> success = new ConcurrentHashMap<>();
     	final Map<String, Throwable> errors = new ConcurrentHashMap<>();
+    	final List<String> arrivalOrder = Collections.synchronizedList(new ArrayList<>());
         final CountDownLatch latch;
         final AtomicInteger arrived = new AtomicInteger(0);
         MergeState(int expected) {
@@ -58,17 +60,20 @@ public class MergeNode implements NodePlugin<Object, Object> {
     private final Set<String> expectedContributors;
     private final Function<Map<String, Object>, Object> mergeFunction;
     private final long timeoutMs;
+    private final MergeStrategy strategy;
  
     private MergeNode(
             String name,
             Set<String> expectedContributors,
             Function<Map<String, Object>, Object> mergeFunction,
-            long timeoutMs
+            long timeoutMs,
+            MergeStrategy strategy
     ) {
         this.name = Objects.requireNonNull(name);
         this.expectedContributors = Collections.unmodifiableSet(new LinkedHashSet<>(expectedContributors));
         this.mergeFunction = Objects.requireNonNull(mergeFunction);
         this.timeoutMs = timeoutMs;
+        this.strategy = strategy;
     }
     
     // two separate key helpers
@@ -131,6 +136,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
                 );
                 return;
             }
+        	state.arrivalOrder.add(contributorName);
         	int count = state.arrived.incrementAndGet();
             context.getLogger().info(
             		 "[MergeNode:" + name + "] Received SUCCESS from: " + contributorName +
@@ -182,11 +188,32 @@ public class MergeNode implements NodePlugin<Object, Object> {
 	         Thread.currentThread().interrupt();
 	         throw new RuntimeException("[MergeNode:" + name + "] interrupted while waiting for contributions", e);
 	     }
+	     Map<String, Object> successSnapshot = new LinkedHashMap<>(state.success);
+	     Map<String, Throwable> errorSnapshot = new LinkedHashMap<>(state.errors);
 	     context.getLogger().info("[MergeNode:" + name + "] All contributions received - merging." +
 	    		 "success=" + state.success.size() +
 	    	     ", errors=" + state.errors.size()
 	     );
-	     return new MergeResult(state.success, state.errors);
+	     Object merged = null;
+	     if (!successSnapshot.isEmpty()) {
+	         try {
+	        	 if (strategy == MergeStrategy.FIRST_WINS) {
+	        		 String first = state.arrivalOrder.get(0);
+	        		 merged = successSnapshot.get(first);
+	        	 } else {
+	        		 merged = mergeFunction.apply(successSnapshot);
+	        	 }
+	         } catch (Exception e) {
+	             context.getLogger().severe(
+	                 "[MergeNode:" + name + "] Merge function failed: " + e.getMessage()
+	             );
+	             throw e;
+	         }
+	     }
+	     context.getLogger().info(
+	    	"[MergeNode:" + name + "] Merged result = " + merged
+	     );
+	     return new MergeResult(state.success, state.errors, merged);
 	}
 	
 	@Override
@@ -197,7 +224,19 @@ public class MergeNode implements NodePlugin<Object, Object> {
 	/** Returns an immutable snapshot of contributions received so far. */
 	public MergeResult getContributions(NodeContext context) {
 		MergeState state = getState(context);
-	    return new MergeResult(state.success, state.errors);
+		Map<String, Object> successSnapshot = new LinkedHashMap<>(state.success);
+	    Map<String, Throwable> errorSnapshot = new LinkedHashMap<>(state.errors);
+		Object merged = null;
+		if (!successSnapshot.isEmpty()) {
+		    try {
+		        merged = mergeFunction.apply(successSnapshot);
+		    } catch (Exception e) {
+		        context.getLogger().warning(
+		            "[MergeNode:" + name + "] Merge function failed during getContributions(): " + e.getMessage()
+		        );
+		    }
+		}
+	    return new MergeResult(state.success, state.errors, merged);
 	}
 	 
 	/** Returns the names of contributors still outstanding. */
@@ -214,6 +253,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
         private final Set<String> expectedContributors = new LinkedHashSet<>();
         private Function<Map<String, Object>, Object> mergeFunction; /** deprecated */
         private long timeoutMs = 30_000;
+        private MergeStrategy strategy = MergeStrategy.COLLECT_ALL; // default
 
         /**
          * Declare the names of upstream nodes whose output this MergeNode will collect.
@@ -228,11 +268,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
             return this;
         }
         public Builder strategy(MergeStrategy strategy) {
-            this.mergeFunction = switch (strategy) {
-                case COLLECT_ALL -> map -> new LinkedHashMap<>(map);
-                case FIRST_WINS  -> map -> map.values().iterator().next();
-                case LIST        -> map -> new ArrayList<>(map.values());
-            };
+            this.strategy = strategy;
             return this;
         }
         public Builder mergeWith(Function<Map<String, Object>, Object> fn) {
@@ -250,7 +286,12 @@ public class MergeNode implements NodePlugin<Object, Object> {
             if (mergeFunction == null) {
                 mergeFunction = map -> new LinkedHashMap<>(map);
             }
-            return new MergeNode(name, expectedContributors, mergeFunction, timeoutMs);
+            Function<Map<String, Object>, Object> fn = switch (strategy) {
+            	case COLLECT_ALL -> map -> new LinkedHashMap<>(map);
+            	case LIST        -> map -> new ArrayList<>(map.values());
+            	case FIRST_WINS  -> null; 
+            };
+            return new MergeNode(name, expectedContributors, mergeFunction, timeoutMs, strategy);
         }
     }
 	
@@ -258,13 +299,16 @@ public class MergeNode implements NodePlugin<Object, Object> {
 
 	    private final Map<String, Object> success;
 	    private final Map<String, Throwable> errors;
+	    private final Object merged;
 
 	    public MergeResult(
 	            Map<String, Object> success,
-	            Map<String, Throwable> errors
+	            Map<String, Throwable> errors,
+	            Object merged
 	    ) {
 	        this.success = Collections.unmodifiableMap(new LinkedHashMap<>(success));
 	        this.errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
+	        this.merged = merged;
 	    }
 
 	    public Map<String, Object> getSuccess() {
@@ -278,6 +322,10 @@ public class MergeNode implements NodePlugin<Object, Object> {
 	    public boolean hasErrors() {
 	        return !errors.isEmpty();
 	    }
+	    
+	    public Object getMerged() {
+	        return merged;
+	    }
 
 	    @SuppressWarnings("unchecked")
 	    public <T> T get(String key) {
@@ -286,7 +334,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
 
 	    @Override
 	    public String toString() {
-	        return "MergeResult{success=" + success.keySet() +
+	        return "MergeResult{merged=" + merged+ ", success=" + success.keySet() +
 	               ", errors=" + errors.keySet() + "}";
 	    }
 	}
