@@ -195,6 +195,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
 	    	     ", errors=" + state.errors.size()
 	     );
 	     Object merged = null;
+	     context.getLogger().info("[MergeNode] Strategy = " + strategy);
 	     if (!successSnapshot.isEmpty()) {
 	         try {
 	        	 if (strategy == MergeStrategy.FIRST_WINS) {
@@ -291,7 +292,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
             	case LIST        -> map -> new ArrayList<>(map.values());
             	case FIRST_WINS  -> null; 
             };
-            return new MergeNode(name, expectedContributors, mergeFunction, timeoutMs, strategy);
+            return new MergeNode(name, expectedContributors, fn, timeoutMs, strategy);
         }
     }
 	

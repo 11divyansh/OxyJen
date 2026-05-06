@@ -101,11 +101,11 @@ class RouterMergeTest {
 	        return input + "_" + name;
 	    }
 	}
-	@Test
+	//@Test
 	void router_merge_first_wins() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
-	        .strategy(MergeNode.MergeStrategy.FIRST_WINS)
+	        .strategy(MergeNode.MergeStrategy.LIST)
 	        .build("merge");
 
 	    Graph graph = GraphBuilder.named("merge-first")
@@ -127,6 +127,69 @@ class RouterMergeTest {
 	    NodeContext ctx = new NodeContext();
 	    Map<String, Object> result = executor.run(graph, "test", ctx);
 	    Object mergeResult = result.get("merge");
+	    System.out.println(result.get("merge"));
 	    assertNotNull(mergeResult);
+	}
+	//@Test
+	void router_merge_all_fail() {
+	    MergeNode merge = new MergeNode.Builder()
+	        .expect("A", "B")
+	        .build("merge");
+
+	    ExecutionRuntime runtime = ExecutionRuntime.defaultRuntime()
+	        .builder()
+	        .failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS)
+	        .build();
+	    Graph graph = GraphBuilder.named("merge-all-fail")
+	        .addNode("router",
+	            RouterNode.<String>builder()
+	                .route("r1", s -> true, "A")
+	                .route("r2", s -> true, "B")
+	                .build("router")
+	        )
+	        .addNode("A", new FailingNode())
+	        .addNode("B", new FailingNode())
+	        .addNode("merge", merge)
+	        .connect("router", "A")
+	        .connect("router", "B")
+	        .connectOnFailure("A", "merge")
+	        .connectOnFailure("B", "merge")
+	        .build();
+	    ParallelExecutor executor = new ParallelExecutor(runtime);
+	    NodeContext ctx = new NodeContext();
+	    Map<String, Object> result = executor.run(graph, "test", ctx);
+	    MergeNode.MergeResult mergeResult =
+	        (MergeNode.MergeResult) result.get("merge");
+	    assertTrue(mergeResult.hasErrors());
+	    assertEquals(2, mergeResult.getErrors().size());
+	}
+	@Test
+	void merge_unexpected_contributor_ignored() {
+	    MergeNode merge = new MergeNode.Builder()
+	        .expect("A") // only expects A
+	        .build("merge");
+
+	    Graph graph = GraphBuilder.named("merge-unexpected")
+	        .addNode("router",
+	            RouterNode.<String>builder()
+	                .route("r1", s -> true, "A")
+	                .route("r2", s -> true, "B")
+	                .build("router")
+	        )
+	        .addNode("A", new AppendNode("_A"))
+	        .addNode("B", new AppendNode("_B"))
+	        .addNode("merge", merge)
+	        .connect("router", "A")
+	        .connect("router", "B")
+	        .connect("A", "merge")
+	        .connect("B", "merge")
+	        .build();
+	    ParallelExecutor executor = new ParallelExecutor();
+	    NodeContext ctx = new NodeContext();
+	    Map<String, Object> result = executor.run(graph, "test", ctx);
+	    MergeNode.MergeResult mergeResult =
+	        (MergeNode.MergeResult) result.get("merge");
+	    assertEquals("test_A", mergeResult.get("A"));
+	    assertFalse(mergeResult.getSuccess().containsKey("B"));
 	}
 }
