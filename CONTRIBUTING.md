@@ -475,6 +475,7 @@ OxyJen/
 │   │           │   ├── Graph.java
 │   │           │   ├── GraphBuilder.java
 │   │           │   ├── NodePlugin.java
+|   |           |   ├── Edge.java
 │   │           │   └── NodeContext.java
 │   │           ├── llm/            # LLM integrations (v0.2+)
 │   │           ├── tools/          # Tool integrations (v0.3+)
