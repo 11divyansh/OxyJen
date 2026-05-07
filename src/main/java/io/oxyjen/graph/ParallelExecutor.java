@@ -90,7 +90,7 @@ public class ParallelExecutor {
             }
         } catch (CompletionException e) {
             Throwable cause = e;
-            while ((cause instanceof CompletionException || cause instanceof ExecutionException)
+            while ((cause instanceof CompletionException || cause instanceof ExecutionException || cause instanceof RuntimeException)
                     && cause.getCause() != null) {
                 cause = cause.getCause();
             }
