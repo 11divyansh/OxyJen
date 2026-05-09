@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -52,7 +53,7 @@ public class ParallelExecutor {
         context.setMetadata("graphName", graph.getName());
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
-        Map<String, Object> nodeOutputs = new ConcurrentHashMap<>();
+        Map<String, Optional<Object>> nodeOutputs = new ConcurrentHashMap<>();
         Set<String> scheduled = ConcurrentHashMap.newKeySet();
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
@@ -115,12 +116,14 @@ public class ParallelExecutor {
         	//NodePlugin<?, ?> actual = terminal.unwrap();
         	String name = terminal.getName();
             String unwrapName = terminal.unwrap().getName();
-        	 context.getLogger().info(
-        		        "[DEBUG] Reading terminal → name=" + name +
-        		        ", unwrap=" + unwrapName +
-        		        ", value=" + nodeOutputs.get(name)
-        		    );
-            results.put(terminal.getName(), nodeOutputs.get(terminal.getName()));
+            Optional<Object> value = nodeOutputs.get(name);
+            Object actual = value != null ? value.orElse(null) : null;
+        	context.getLogger().info(
+        		       "[DEBUG] Reading terminal → name=" + name +
+        		       ", unwrap=" + unwrapName +
+        		       ", value=" + actual
+        		   );
+            results.put(terminal.getName(), actual);
         }
         if (results.isEmpty()) {
             throw new IllegalStateException(
@@ -162,7 +165,7 @@ public class ParallelExecutor {
             Object input,
             Graph graph,
             NodeContext context,
-            Map<String, Object> nodeOutputs,
+            Map<String, Optional<Object>> nodeOutputs,
             Set<NodePlugin<?, ?>> inProgress,
             Set<String> scheduled,
             Set<NodePlugin<?, ?>> cyclicTargets,
@@ -181,10 +184,10 @@ public class ParallelExecutor {
                 safeNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
                 if (output instanceof BranchNode.RoutedResult routed) {
-                	nodeOutputs.put(node.getName(), routed.output());
+                	nodeOutputs.put(node.getName(), Optional.ofNullable(routed.output()));
                 	return routed;
                 }
-                nodeOutputs.put(node.getName(), output);
+                nodeOutputs.put(node.getName(), Optional.ofNullable(output));
                 return output;
             } catch (Exception e) {
             	if (!(e instanceof MergeNode.MergeTimeoutException)) {
@@ -208,7 +211,7 @@ public class ParallelExecutor {
                         }
                         // continue graph but preserve error
                     	NodeFailure failure = new NodeFailure(node.getName(), e);
-                        nodeOutputs.put(node.getName(), failure);
+                        nodeOutputs.put(node.getName(), Optional.ofNullable(failure));
                         return failure;
                     }
                     
