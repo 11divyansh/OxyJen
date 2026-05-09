@@ -72,8 +72,7 @@ public class BranchNode<I> implements NodePlugin<I, Object> {
     }
     private void incrementMetric(NodeContext ctx, String branch) {
         String key = "branch." + name + "." + branch + ".count";
-        Integer count = ctx.get(key, Integer.class).orElse(0);
-        ctx.set(key, count + 1);
+        ctx.getRuntime().getMetrics().increment(key);
     }
 
     @Override

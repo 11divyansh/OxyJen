@@ -1,9 +1,12 @@
 package io.oxyjen.execution;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Centralized concurrency runtime injected into {@link io.oxyjen.NodeContext}
@@ -49,6 +52,7 @@ public final class ExecutionRuntime {
     private final Semaphore limiter;
     private final FailureMode failureMode;
     private final long defaultTimeoutMs;
+    private final MetricsRegistry metrics;
  
     private ExecutionRuntime(
             ExecutorService executor,
@@ -60,6 +64,7 @@ public final class ExecutionRuntime {
         this.limiter = limiter;
         this.failureMode = failureMode;
         this.defaultTimeoutMs = defaultTimeoutMs;
+        this.metrics = new MetricsRegistry();
     }
  
     public ExecutorService getExecutor() {
@@ -76,6 +81,10 @@ public final class ExecutionRuntime {
  
     public long getDefaultTimeoutMs() {
         return defaultTimeoutMs;
+    }
+    
+    public MetricsRegistry getMetrics() {
+        return metrics;
     }
  
     public static Builder builder() {
@@ -151,6 +160,18 @@ public final class ExecutionRuntime {
                 failureMode,
                 defaultTimeoutMs
             );
+        }
+    }
+    public final class MetricsRegistry {
+        private final ConcurrentMap<String, AtomicLong> counters = new ConcurrentHashMap<>();
+        public void increment(String key) {
+            counters
+                .computeIfAbsent(key, k -> new AtomicLong())
+                .incrementAndGet();
+        }
+        public long get(String key) {
+            AtomicLong counter = counters.get(key);
+            return counter == null ? 0 : counter.get();
         }
     }
 }

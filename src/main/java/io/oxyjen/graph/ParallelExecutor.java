@@ -262,7 +262,6 @@ public class ParallelExecutor {
                 NodePlugin<?, ?> target = edge.getTarget().unwrap();
                 if (target instanceof MergeNode merge && !(node instanceof MergeNode)) {
                     merge.contribute(node.getName(), output, context);
-
                     if (scheduled.add(merge.getName())) {
                         downstream.add(
                             executeNodeAsync(merge, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
@@ -282,8 +281,7 @@ public class ParallelExecutor {
             inProgress.remove(node);
         });
     	allFutures.add(future);
-    	return future;
-        
+    	return future; 
     }
     
     private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {
