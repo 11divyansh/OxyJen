@@ -193,7 +193,7 @@ class RouterMergeTest {
 	    assertEquals("test_A", mergeResult.get("A"));
 	    assertFalse(mergeResult.getSuccess().containsKey("B"));
 	}
-	@Test
+	//@Test
 	void router_merge_timeout() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")

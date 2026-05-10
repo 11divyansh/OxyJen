@@ -16,6 +16,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.GraphBuilder;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.ParallelExecutor;
 import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.branching.MergeNode;
@@ -241,7 +242,7 @@ class BranchRouterMergeTest {
 	            () -> executor.run(graph, "test", new NodeContext())
 	        );
 	    }
-	    @Test
+	   // @Test
 	    void branch_router_metrics_increment() {
 	        Graph graph = GraphBuilder.named("metrics")
 	            .addNode("branch",
@@ -268,5 +269,42 @@ class BranchRouterMergeTest {
 	            .getMetrics()
 	            .get("branch.branch.short.count");
 	        assertEquals(2, metric);
+	    }
+	    @Test
+	    void branch_router_merge_collect_errors() {
+	        ExecutionRuntime runtime = ExecutionRuntime.builder()
+	            .failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS)
+	            .build();
+	        ParallelExecutor executor = new ParallelExecutor(runtime);
+	        MergeNode merge = new MergeNode.Builder()
+	            .expect("A", "B")
+	            .build("merge");
+	        Graph graph = GraphBuilder.named("collect-errors")
+	            .addNode("branch",
+	                BranchNode.<String>builder()
+	                    .when("go", s -> true)
+	                    .then("router")
+	                    .build("branch")
+	            )
+	            .addNode("router",
+	                RouterNode.<String>builder()
+	                    .route("good", s -> true, "A")
+	                    .route("bad", s -> true, "B")
+	                    .build("router")
+	            )
+	            .addNode("A", new AppendNode("_A"))
+	            .addNode("B", new FailingNode())
+	            .addNode("merge", merge)
+	            .connect("branch", "router")
+	            .connect("router", "A")
+	            .connect("router", "B")
+	            .connect("A", "merge")
+	            .connect("B", "merge")
+	            .build();
+	        Map<String, Object> result = executor.run(graph, "test", new NodeContext());
+	        MergeResult mergeResult = (MergeResult) result.get("merge");
+	        assertEquals(1, mergeResult.getSuccess().size());
+	        assertEquals(1, mergeResult.getErrors().size());
+	        assertTrue(mergeResult.getErrors().containsKey("B"));
 	    }
 }

@@ -258,7 +258,7 @@ public class ParallelExecutor {
                 boolean decision = (output instanceof NodeFailure failure)
                         ? edge.shouldTraverseFailure(failure, context)
                         : edge.shouldTraverse(output, context);
-                if (!decision) continue;
+                //if (!decision) continue;
                 NodePlugin<?, ?> target = edge.getTarget().unwrap();
                 if (target instanceof MergeNode merge && !(node instanceof MergeNode)) {
                     merge.contribute(node.getName(), output, context);
@@ -269,6 +269,7 @@ public class ParallelExecutor {
                     }
                     continue;
                 }
+                if (!decision) continue;
                 if (scheduled.add(target.getName())) {
                     downstream.add(
                         executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
