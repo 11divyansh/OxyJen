@@ -290,7 +290,7 @@ public class MergeNode implements NodePlugin<Object, Object> {
             Function<Map<String, Object>, Object> fn = switch (strategy) {
             	case COLLECT_ALL -> map -> new LinkedHashMap<>(map);
             	case LIST        -> map -> new ArrayList<>(map.values());
-            	case FIRST_WINS  -> null; 
+            	case FIRST_WINS  -> map -> map; 
             };
             return new MergeNode(name, expectedContributors, fn, timeoutMs, strategy);
         }
