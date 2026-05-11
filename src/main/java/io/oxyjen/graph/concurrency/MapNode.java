@@ -82,6 +82,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
 	     @Override
 	     public String toString() { return "Failure(" + error.getMessage() + ")"; }
 	 }
+	 
     /**
      * Holds per-element results in original input order.
      * Failed elements are represented as null in the output list,
@@ -89,12 +90,13 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
      */
     public static final class MapResult<O> {
  
-        private final AtomicReferenceArray<ElementResult<O>> results;       // null at index i = element i failed
-        private final int totalElements;
+        private final List<ElementResult<O>> results;       // null at index i = element i failed
  
-        MapResult(AtomicReferenceArray<ElementResult<O>> results, int totalElements) {
+        MapResult(List<ElementResult<O>> results) {
             this.results = results;
-            this.totalElements = totalElements;
+        }
+        public List<ElementResult<O>> getResults() {
+            return results;
         }
         /** Returns the ElementResult at index - always Success or Failure, never null. */
         public ElementResult<O> get(int index) {
@@ -134,8 +136,8 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
          */
         public List<O> toList() {
             List<O> list = new ArrayList<>();
-            for (int i = 0; i < totalElements; i++) {
-                if (get(i) instanceof Success<O> s) list.add(s.value());
+            for (ElementResult<O> result : results) {
+                if (result instanceof Success<O> s) list.add(s.value());
             }
             return Collections.unmodifiableList(list);
         }
@@ -154,43 +156,31 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
          * }</pre>
          */
         public List<ElementResult<O>> toResultList() {
-            List<ElementResult<O>> list = new ArrayList<>(totalElements);
-            for (int i = 0; i < totalElements; i++) list.add(get(i));
+            List<ElementResult<O>> list = new ArrayList<>();
+            for (ElementResult<O> result : results) list.add(result);
             return Collections.unmodifiableList(list);
         }
  
         /** Indices of elements that failed. */
         public Set<Integer> failedIndices() {
             Set<Integer> failed = new LinkedHashSet<>();
-            for (int i = 0; i < totalElements; i++) {
+            for (int i = 0; i < results.size(); i++) {
                 if (!get(i).isSuccess()) failed.add(i);
             }
             return Collections.unmodifiableSet(failed);
         }
  
         public boolean hasErrors() {
-            for (int i = 0; i < totalElements; i++) {
+            for (int i = 0; i < results.size(); i++) {
                 if (!get(i).isSuccess()) return true;
             }
             return false;
         }
  
-        public int successCount() {
-            int count = 0;
-            for (int i = 0; i < totalElements; i++) {
-                if (get(i).isSuccess()) count++;
-            }
-            return count;
-        }
- 
-        public int errorCount()    { return totalElements - successCount(); }
-        public int totalCount()    { return totalElements; }
- 
         @Override
         public String toString() {
-            return "MapResult{total=" + totalElements
-                + ", succeeded=" + successCount()
-                + ", failed=" + errorCount() + "}";
+            return "MapResult{total=" + results.size()
+                + ", results=" + results + "}";
         }
     }
  
@@ -218,9 +208,9 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
     public MapResult process(Iterable<I> input, NodeContext context) {
     	 List<I> elements = new ArrayList<>();
          input.forEach(elements::add);
-         if (elements.isEmpty()) {
+         if (elements == null || elements.isEmpty()) {
              context.getLogger().info("[MapNode:" + name + "] Empty input.");
-             return new MapResult<>(new AtomicReferenceArray<>(0), 0);
+             return new MapResult<>(List.of());
          }
   
          ExecutionRuntime runtime = context.getRuntime();
