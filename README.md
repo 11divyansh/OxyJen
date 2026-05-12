@@ -36,7 +36,7 @@ Oxyjen is meant for runtime reliability, your graphs will be self-aware and will
 
 Features like, async, project loom, parallel processing, java concurrency will lay down the foundation of fail-safe graph structure for Oxyjen.
 
-I'm not here to compete with Langchain4j, I'm here to create a framework for devs.
+I'm not here to compete with Langchain4j, I'm here to create a reliable execution engine for devs.
 
 
 ### Why Oxyjen?
