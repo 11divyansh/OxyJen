@@ -6,7 +6,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -273,7 +276,63 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                     + ", globalTimeout=" + globalTimeoutMs + "ms"
                     + (completionPollTimeoutMs > 0 ? ", pollTimeout=" + completionPollTimeoutMs + "ms" : "")
          );
+         AtomicReferenceArray<ElementResult<O>> results = new AtomicReferenceArray<>(elements.size());
+         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(globalTimeoutMs);
+         ExecutorCompletionService<IndexedResult<O>> ecs = new ExecutorCompletionService<>(executor);
+         List<Future<IndexedResult<O>>> submittedFutures = new ArrayList<>(elements.size());
+  
+         int submitted = 0;
+         int collected = 0;
+         boolean deadlineExceeded = false;
+  
+         // Seed the initial window - limiter acquired before submit
+         while (submitted < elements.size() && submitted < windowSize) {
+             Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, limiter, context);
+             submittedFutures.add(f);
+             submitted++;
+         }
          return null;
+    }
+    
+    /**
+     * Acquires limiter before submit (submission throttling not worker blocking).
+     */
+    private Future<IndexedResult<O>> submitOne(
+            int index,
+            List<I> elements,
+            ExecutorCompletionService<IndexedResult<O>> ecs,
+            Semaphore limiter,
+            NodeContext context
+    ) {
+        final I element = elements.get(index);
+ 
+        try {
+            limiter.acquire(); // blocks calling (orchestration) thread, not worker
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("[MapNode:" + name + "] interrupted acquiring limiter", e);
+        }
+ 
+        try {
+            return ecs.submit(() -> {
+                try {
+                    O output = mapFn.apply(element);
+                    return new IndexedResult<>(index, new Success<>(output));
+                } catch (Exception e) {
+                    context.getLogger().warning(
+                        "[MapNode:" + name + "] Element[" + index + "] failed: " + e.getMessage()
+                    );
+                    return new IndexedResult<>(index, new Failure<>(e));
+                } finally {
+                    limiter.release();
+                }
+            });
+        } catch (RuntimeException e) {
+            // ecs.submit() threw (executor shutdown, rejection, OOM)
+            // permit was acquired but task never submitted - release it now
+            limiter.release();
+            throw e;
+        }
     }
     
     /** Fallback when no runtime is available - runs elements sequentially. */
