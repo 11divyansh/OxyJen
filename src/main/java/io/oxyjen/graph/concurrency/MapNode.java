@@ -50,37 +50,54 @@ import io.oxyjen.execution.ExecutionRuntime;
  * @param <I> The element type of the input collection.
  * @param <O> The output type produced by the mapping function.
  */
-public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult> {
+public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<O>> {
  
-	 public sealed interface ElementResult<T> permits Success, Failure {
+	 public sealed interface ElementResult<T> permits MapNode.Success, MapNode.Failure, MapNode.Cancelled, MapNode.NotExecuted {
 		 boolean isSuccess();
+		 default boolean isCancelled() { return false; }
+		 default boolean isNotExecuted() { return false; }
 	 }
 	 
 	 public static final class Success<T> implements ElementResult<T> {
 		 private final T value;
-	     public Success(T value) {
-	         this.value = value;  // null is a valid success value
-	     }
+	     public Success(T value) { this.value = value; }  // null is a valid success value}
 	     public T value() { return value; }
-	 
-	     @Override
-	     public boolean isSuccess() { return true; }
-	 
-	     @Override
-         public String toString() { return "Success(" + value + ")"; }
+	     @Override public boolean isSuccess() { return true; }
+	     @Override public String toString() { return "Success(" + value + ")"; }
 	 }
 	 
 	 public static final class Failure<T> implements ElementResult<T> {
 	     private final Throwable error;
-	     public Failure(Throwable error) {
-	         this.error = Objects.requireNonNull(error);
-         }
+	     public Failure(Throwable error) { this.error = Objects.requireNonNull(error); }
 	     public Throwable error() { return error; }
+	     @Override public boolean isSuccess() { return false; }
+	     @Override public String toString() { return "Failure(" + error.getMessage() + ")"; }
+	 }
 	 
-	     @Override
-	     public boolean isSuccess() { return false; }
-	     @Override
-	     public String toString() { return "Failure(" + error.getMessage() + ")"; }
+	 /** Element was submitted and running but cancelled (timeout or fail-fast). */
+	 public static final class Cancelled<T> implements ElementResult<T> {
+	     private final String reason;
+	     public Cancelled(String reason)        { this.reason = reason; }
+	     public String reason()                 { return reason; }
+	     @Override public boolean isSuccess()   { return false; }
+	     @Override public boolean isCancelled() { return true; }
+	     @Override public String toString()     { return "Cancelled(" + reason + ")"; }
+     }
+	 
+	 /** Element was never submitted — window full when deadline hit. */
+	 public static final class NotExecuted<T> implements ElementResult<T> {
+	     private final String reason;
+	     public NotExecuted(String reason)       { this.reason = reason; }
+         public String reason()                  { return reason; }
+	     @Override public boolean isSuccess()    { return false; }
+	     @Override public boolean isNotExecuted(){ return true; }
+	     @Override public String toString()      { return "NotExecuted(" + reason + ")"; }
+	 }
+	 
+	 private record IndexedResult<O>(int index, ElementResult<O> result) {
+		 IndexedResult {
+			 if (index < 0) throw new IllegalArgumentException("index must be >= 0, got: " + index);
+	     }
 	 }
 	 
     /**
@@ -88,56 +105,52 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
      * Failed elements are represented as null in the output list,
      * with their exceptions accessible via {@link #getError(int)}.
      */
-    public static final class MapResult<O> {
+     public static final class MapResult<O> {
  
-        private final List<ElementResult<O>> results;       // null at index i = element i failed
+        private final List<ElementResult<O>> snapshot;       // null at index i = element i failed
+        private final int totalElements;
  
-        MapResult(List<ElementResult<O>> results) {
-            this.results = results;
+        MapResult(List<ElementResult<O>> snapshot, int totalElements) {
+            this.snapshot = Collections.unmodifiableList(snapshot);
+            this.totalElements = totalElements;
         }
-        public List<ElementResult<O>> getResults() {
-            return results;
-        }
+        
         /** Returns the ElementResult at index - always Success or Failure, never null. */
         public ElementResult<O> get(int index) {
-            ElementResult<O> r = results.get(index);
-            return r != null ? r : new Failure<>(new IllegalStateException("Element[" + index + "] never completed"));
+            return snapshot.get(index);
         }
  
         /** True if element at index succeeded (including null value). */
-        public boolean succeeded(int index) {
-            return get(index).isSuccess();
-        }
+        public boolean succeeded(int index) { return get(index).isSuccess(); }
  
         /** True if element at index failed. */
-        public boolean failed(int index) {
-            return !get(index).isSuccess();
-        }
+        public boolean failed(int index) { return !get(index).isSuccess(); }
  
+        public boolean cancelled(int index)    { return get(index).isCancelled(); }
+        public boolean notExecuted(int index)  { return get(index).isNotExecuted(); }
+        
         /** Returns the output value for a successful element. Throws if failed. */
         @SuppressWarnings("unchecked")
         public O getValue(int index) {
-            ElementResult<O> r = get(index);
-            if (r instanceof Success<O> s) return s.value();
+            if (get(index) instanceof Success<O> s) return s.value();
             throw new IllegalStateException(
-                "Element[" + index + "] failed — call getError() instead"
+                "Element[" + index + "] failed - call getError() instead"
             );
         }
  
         /** Returns the error for a failed element. Null if it succeeded. */
         public Throwable getError(int index) {
-            ElementResult<O> r = get(index);
-            return r instanceof Failure<O> f ? f.error() : null;
+            return get(index) instanceof Failure<O> f ? f.error() : null;
         }
  
         /**
          * All successful outputs in original input order.
          * Failed elements are skipped entirely - no nulls.
          */
-        public List<O> toList() {
+        public List<O> toSuccessfulList() {
             List<O> list = new ArrayList<>();
-            for (ElementResult<O> result : results) {
-                if (result instanceof Success<O> s) list.add(s.value());
+            for (int i = 0 ; i < totalElements; i++) {
+                if (get(i) instanceof Success<O> s) list.add(s.value());
             }
             return Collections.unmodifiableList(list);
         }
@@ -156,31 +169,53 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult>
          * }</pre>
          */
         public List<ElementResult<O>> toResultList() {
-            List<ElementResult<O>> list = new ArrayList<>();
-            for (ElementResult<O> result : results) list.add(result);
-            return Collections.unmodifiableList(list);
+        	return snapshot;
         }
  
         /** Indices of elements that failed. */
         public Set<Integer> failedIndices() {
             Set<Integer> failed = new LinkedHashSet<>();
-            for (int i = 0; i < results.size(); i++) {
-                if (!get(i).isSuccess()) failed.add(i);
+            for (int i = 0; i < totalElements; i++) {
+                if (get(i) instanceof Failure<O>) failed.add(i);
             }
             return Collections.unmodifiableSet(failed);
         }
  
-        public boolean hasErrors() {
-            for (int i = 0; i < results.size(); i++) {
-                if (!get(i).isSuccess()) return true;
+        public boolean hasErrors() { return !failedIndices().isEmpty(); }
+        public boolean hasIncomplete() { return !cancelledIndices().isEmpty() || !notExecutedIndices().isEmpty(); }
+        public Set<Integer> cancelledIndices() {
+            Set<Integer> set = new LinkedHashSet<>();
+            for (int i = 0; i < totalElements; i++) {
+                if (get(i).isCancelled()) set.add(i);
             }
-            return false;
+            return Collections.unmodifiableSet(set);
         }
+ 
+        public Set<Integer> notExecutedIndices() {
+            Set<Integer> set = new LinkedHashSet<>();
+            for (int i = 0; i < totalElements; i++) {
+                if (get(i).isNotExecuted()) set.add(i);
+            }
+            return Collections.unmodifiableSet(set);
+        }
+        
+        public int successCount() {
+            int c = 0;
+            for (int i = 0; i < totalElements; i++) if (get(i).isSuccess()) c++;
+            return c;
+        }
+        public int errorCount()       { return failedIndices().size(); }
+        public int cancelledCount()   { return cancelledIndices().size(); }
+        public int notExecutedCount() { return notExecutedIndices().size(); }
+        public int totalCount()       { return totalElements; }
  
         @Override
         public String toString() {
-            return "MapResult{total=" + results.size()
-                + ", results=" + results + "}";
+            return "MapResult{total=" + totalElements
+                + ", succeeded=" + successCount()
+                + ", failed=" + errorCount()
+                + ", cancelled=" + cancelledCount()
+                + ", notExecuted=" + notExecutedCount() + "}";
         }
     }
  
