@@ -368,7 +368,7 @@ Built with ❤️ by [Divyansh Bhatt](https://github.com/11divyansh) - a BTech C
 
 ---
 
-** Watch for updates on v0.2 progress!**
+** Watch for updates on v0.5 progress!**
 
 ## License
 [Apache 2.0](LICENSE) (open-source, enterprise-friendly) 
