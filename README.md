@@ -1,8 +1,8 @@
 # OxyJen🫧
 
-**OxyJen** is the missing AI framework for Java & JVM enterprises.  
+**OxyJen** is the missing deterministic AI Runtime for Java & JVM enterprises.  
 
-**AI Orchestration Framework for Java** - Build complex AI pipelines with simplicity and power.
+**Deterministic AI Workflow Runtime for the JVM** - Build complex AI pipelines with simplicity and power.
 
 ---
 
