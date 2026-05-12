@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.Function;
 
@@ -84,7 +85,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
 	     @Override public String toString()     { return "Cancelled(" + reason + ")"; }
      }
 	 
-	 /** Element was never submitted — window full when deadline hit. */
+	 /** Element was never submitted - window full when deadline hit. */
 	 public static final class NotExecuted<T> implements ElementResult<T> {
 	     private final String reason;
 	     public NotExecuted(String reason)       { this.reason = reason; }
@@ -221,31 +222,34 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
  
     private final String name;
     private final Function<I, O> mapFn;
-    private final long timeoutMs;
+    private final long globalTimeoutMs;
     private final boolean continueOnError;
+    private final long completionPollTimeoutMs;
     private final int maxInFlight;         // bounded window size(0 = use runtime limiter permits)
  
     private MapNode(
             String name,
             Function<I, O> mapFn,
-            long timeoutMs,
+            long globalTimeoutMs,
+            long completionPollTimeoutMs,
             boolean continueOnError,
             int maxInFlight
     ) {
         this.name = Objects.requireNonNull(name);
         this.mapFn = Objects.requireNonNull(mapFn);
-        this.timeoutMs = timeoutMs;
+        this.globalTimeoutMs = globalTimeoutMs;
+        this.completionPollTimeoutMs = completionPollTimeoutMs;
         this.continueOnError = continueOnError;
         this.maxInFlight = maxInFlight;
     }
  
     @Override
-    public MapResult process(Iterable<I> input, NodeContext context) {
+    public MapResult<O> process(Iterable<I> input, NodeContext context) {
     	 List<I> elements = new ArrayList<>();
          input.forEach(elements::add);
-         if (elements == null || elements.isEmpty()) {
+         if (elements.isEmpty()) {
              context.getLogger().info("[MapNode:" + name + "] Empty input.");
-             return new MapResult<>(List.of());
+             return new MapResult<O>(Collections.<ElementResult<O>>emptyList(), 0);
          }
   
          ExecutionRuntime runtime = context.getRuntime();
@@ -263,24 +267,109 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
   
          int windowSize = maxInFlight > 0 ? maxInFlight : limiter.availablePermits();
          if (windowSize <= 0) windowSize = Runtime.getRuntime().availableProcessors();
+         context.getLogger().info(
+        		 "[MapNode:" + name + "] Mapping " + elements.size()
+                 	+ " elements, window=" + windowSize
+                    + ", globalTimeout=" + globalTimeoutMs + "ms"
+                    + (completionPollTimeoutMs > 0 ? ", pollTimeout=" + completionPollTimeoutMs + "ms" : "")
+         );
          return null;
     }
     
     /** Fallback when no runtime is available - runs elements sequentially. */
     private MapResult<O> runSequential(List<I> elements, NodeContext context) {
-        AtomicReferenceArray<ElementResult<O>> results = new AtomicReferenceArray<>(elements.size());
+    	long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(globalTimeoutMs);
+    	List<ElementResult<O>> results = new ArrayList<>(elements.size());
         for (int i = 0; i < elements.size(); i++) {
+        	if (System.nanoTime() > deadline) {
+                String reason = "Sequential timeout after " + globalTimeoutMs + "ms";
+                context.getLogger().warning(
+                    "[MapNode:" + name + "] Sequential deadline exceeded at element[" + i + "]"
+                );
+                // mark current and remaining as NotExecuted
+                while (results.size() < elements.size()) {
+                    results.add(new NotExecuted<>(reason));
+                }
+                break;
+            }
             try {
-                results.set(i, new Success<>(mapFn.apply(elements.get(i))));
+                results.add(new Success<>(mapFn.apply(elements.get(i))));
             } catch (Exception e) {
-                results.set(i, new Failure<>(e));
+            	results.add(new Failure<>(e));
                 if (!continueOnError) {
+                	// fill remaining as NotExecuted before throwing
+                	String reason = "Aborted after element[" + i + "] failed";
+                	context.getLogger().warning("[MapNode:" + name + "] " + reason + ": " + e.getMessage());
                     throw new MapElementException(name, i, e);
                 }
             }
         }
-        return new MapResult<>(results, elements.size());
+        return new MapResult<O>(Collections.unmodifiableList(results), elements.size());
     }
+    
+    public static <I, O> Builder<I, O> builder() {
+        return new Builder<>();
+    }
+ 
+    public static final class Builder<I, O> {
+ 
+        private Function<I, O> mapFn;
+        private long globalTimeoutMs         = 60_000L;
+        private long completionPollTimeoutMs = 0L;
+        private boolean continueOnError      = false;
+        private int maxInFlight              = 0;
+ 
+        public Builder<I, O> mapWith(Function<I, O> fn) {
+            this.mapFn = Objects.requireNonNull(fn);
+            return this;
+        }
+ 
+        /** Total time budget for the entire map operation. Default: 60s. */
+        public Builder<I, O> timeout(long duration, TimeUnit unit) {
+            this.globalTimeoutMs = unit.toMillis(duration);
+            return this;
+        }
+ 
+        /**
+         * Controls how long each ECS.poll() waits before declaring a timeout.
+         * NOT true per-element cancellation - a slow mapper continues running
+         * until thread interruption is respected or the SDK timeout fires.
+         * Mapper functions should be interruption-aware for this to work correctly.
+         */
+        public Builder<I, O> completionPollTimeout(long duration, TimeUnit unit) {
+            this.completionPollTimeoutMs = unit.toMillis(duration);
+            return this;
+        }
+ 
+        /**
+         * Max elements in-flight simultaneously.
+         * Default: 0 - uses runtime.getMaxConcurrency().
+         */
+        public Builder<I, O> maxInFlight(int max) {
+            if (max < 1) throw new IllegalArgumentException("maxInFlight must be >= 1");
+            this.maxInFlight = max;
+            return this;
+        }
+ 
+        /**
+         * Capture failed elements in result instead of aborting on first failure.
+         * Note: if runtime.getFailureMode() == FAIL_FAST, this flag overrides it
+         * for MapNode - continueOnError wins at the node level.
+         */
+        public Builder<I, O> continueOnError() {
+            this.continueOnError = true;
+            return this;
+        }
+ 
+        public MapNode<I, O> build(String nodeName) {
+            if (mapFn == null) {
+                throw new IllegalStateException("MapNode [" + nodeName + "] requires mapWith()");
+            }
+            return new MapNode<>(nodeName, mapFn, globalTimeoutMs,
+                completionPollTimeoutMs, continueOnError, maxInFlight);
+        }
+    }
+    
     public static class MapElementException extends RuntimeException {
         private final int elementIndex;
  
