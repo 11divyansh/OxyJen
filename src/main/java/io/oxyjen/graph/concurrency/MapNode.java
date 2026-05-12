@@ -291,7 +291,79 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
              submittedFutures.add(f);
              submitted++;
          }
-         return null;
+         // Drain: collect one, submit one
+         while (collected < elements.size()) {
+             if (System.nanoTime() > deadline) {
+                 deadlineExceeded = true;
+                 context.getLogger().warning(
+                     "[MapNode:" + name + "] Global deadline exceeded after "
+                         + collected + "/" + elements.size() + " collected."
+                 );
+                 break;
+             }
+  
+             long remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+             long pollTimeout = completionPollTimeoutMs > 0
+                 ? Math.min(completionPollTimeoutMs, remainingMs)
+                 : remainingMs;
+  
+             Future<IndexedResult<O>> future;
+             try {
+                 future = ecs.poll(Math.max(pollTimeout, 1), TimeUnit.MILLISECONDS);
+             } catch (InterruptedException e) {
+                 Thread.currentThread().interrupt();
+                 cancelAll(submittedFutures);
+                 throw new RuntimeException("[MapNode:" + name + "] interrupted", e);
+             }
+  
+             if (future == null) {
+                 deadlineExceeded = true;
+                 context.getLogger().warning(
+                     "[MapNode:" + name + "] Poll timed out after " + pollTimeout + "ms."
+                 );
+                 break;
+             }
+  
+             IndexedResult<O> indexed;
+             try {
+                 indexed = future.get();
+             } catch (InterruptedException e) {
+                 Thread.currentThread().interrupt();
+                 cancelAll(submittedFutures);
+                 throw new RuntimeException("[MapNode:" + name + "] interrupted collecting result", e);
+             } catch (ExecutionException e) {
+                 // fix 1: task body catches all exceptions internally — this path means
+                 // something went deeply wrong (e.g. Error, not Exception). Don't fake
+                 // an index of -1. Cancel everything and propagate immediately.
+                 cancelAll(submittedFutures);
+                 Throwable cause = e.getCause() != null ? e.getCause() : e;
+                 throw new RuntimeException(
+                     "[MapNode:" + name + "] unexpected task-level failure — "
+                         + "this should not happen as task body catches all Exception types. "
+                         + "Possible cause: Error (OOM, StackOverflow) escaped the task.",
+                     cause
+                 );
+             }
+  
+             results.set(indexed.index(), indexed.result());
+             collected++;
+  
+             // cancel ALL before throwing on fail-fast
+             if (failFast && !indexed.result().isSuccess()) {
+                 cancelAll(submittedFutures);
+                 throw new MapElementException(
+                     name, indexed.index(), ((Failure<O>) indexed.result()).error()
+                 );
+             }
+  
+             // Submit next - limiter already acquired in submitOne before submit
+             if (submitted < elements.size()) {
+                 Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, limiter, context);
+                 submittedFutures.add(f);
+                 submitted++;
+             }
+         }
+         return results;
     }
     
     /**
@@ -332,6 +404,15 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             // permit was acquired but task never submitted - release it now
             limiter.release();
             throw e;
+        }
+    }
+    
+    /** skip already-done futures */
+    private void cancelAll(List<Future<IndexedResult<O>>> futures) {
+        for (Future<IndexedResult<O>> f : futures) {
+            if (!f.isDone()) {
+                f.cancel(true);
+            }
         }
     }
     
