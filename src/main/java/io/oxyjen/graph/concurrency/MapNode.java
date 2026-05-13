@@ -332,9 +332,8 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                  cancelAll(submittedFutures);
                  throw new RuntimeException("[MapNode:" + name + "] interrupted collecting result", e);
              } catch (ExecutionException e) {
-                 // fix 1: task body catches all exceptions internally — this path means
-                 // something went deeply wrong (e.g. Error, not Exception). Don't fake
-                 // an index of -1. Cancel everything and propagate immediately.
+                 // task body catches all exceptions internally, this path means
+                 // something went deeply wrong (e.g. Error, not Exception). Cancel everything and propagate immediately.
                  cancelAll(submittedFutures);
                  Throwable cause = e.getCause() != null ? e.getCause() : e;
                  throw new RuntimeException(
@@ -363,7 +362,38 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                  submitted++;
              }
          }
-         return results;
+         // cancel in-flight, mark with distinct Cancelled vs NotExecuted
+         if (deadlineExceeded) {
+             cancelAll(submittedFutures); 
+             String timeoutReason = "Global timeout of " + globalTimeoutMs + "ms exceeded";
+             for (int i = 0; i < elements.size(); i++) {
+                 // distinguish submitted-but-cancelled from never-submitted
+                 if (i < submitted) {
+                     // was submitted - running or waiting - now cancelled
+                     results.compareAndSet(i, null, new Cancelled<>(timeoutReason));
+                 } else {
+                     // never made it into the window
+                     results.compareAndSet(i, null, new NotExecuted<>(timeoutReason));
+                 }
+             }
+  
+             if (failFast) {
+                 throw new RuntimeException(
+                     "[MapNode:" + name + "] timed out after " + globalTimeoutMs + "ms. "
+                         + "Cancelled " + (submitted - collected) + " in-flight tasks. "
+                         + "Note: tasks ignoring thread interruption may still be running - "
+                         + "ensure your mapper respects interruption or configures SDK-level timeouts."
+                 );
+             }
+         }
+  
+         // Freeze snapshot, no more mutations possible after this point
+         List<ElementResult<O>> snapshot = freezeSnapshot(results, elements.size());
+         MapResult<O> result = new MapResult<>(snapshot, elements.size());
+         context.getLogger().info(
+             "[MapNode:" + name + "] Done - " + result
+         );
+         return result;
     }
     
     /**
@@ -390,11 +420,14 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                 try {
                     O output = mapFn.apply(element);
                     return new IndexedResult<>(index, new Success<>(output));
-                } catch (Exception e) {
+                } catch (Throwable t) {
                     context.getLogger().warning(
-                        "[MapNode:" + name + "] Element[" + index + "] failed: " + e.getMessage()
+                        "[MapNode:" + name + "] Element[" + index + "] failed: " + t.getMessage()
                     );
-                    return new IndexedResult<>(index, new Failure<>(e));
+                    if (t instanceof VirtualMachineError vme) {
+                        throw vme;
+                    }
+                    return new IndexedResult<>(index, new Failure<>(t));
                 } finally {
                     limiter.release();
                 }
@@ -414,6 +447,18 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                 f.cancel(true);
             }
         }
+    }
+    
+    /** Drains AtomicReferenceArray into immutable snapshot. */
+    private List<ElementResult<O>> freezeSnapshot(
+            AtomicReferenceArray<ElementResult<O>> arr, int size
+    ) {
+        List<ElementResult<O>> list = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            ElementResult<O> r = arr.get(i);
+            list.add(r != null ? r : new NotExecuted<>("Result slot empty after collection"));
+        }
+        return list;
     }
     
     /** Fallback when no runtime is available - runs elements sequentially. */
@@ -494,7 +539,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
         /**
          * Capture failed elements in result instead of aborting on first failure.
          * Note: if runtime.getFailureMode() == FAIL_FAST, this flag overrides it
-         * for MapNode - continueOnError wins at the node level.
+         * for MapNode - continueOnError disables fail-fast behavior for this node.
          */
         public Builder<I, O> continueOnError() {
             this.continueOnError = true;
