@@ -113,10 +113,40 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
  
         private final List<ElementResult<O>> snapshot;       // null at index i = element i failed
         private final int totalElements;
+        
+        private final int successCount;
+        private final int failureCount;
+        private final int cancelledCount;
+        private final int notExecutedCount;
+        private final Set<Integer> failedIndices;
+        private final Set<Integer> cancelledIndices;
+        private final Set<Integer> notExecutedIndices;
  
         MapResult(List<ElementResult<O>> snapshot, int totalElements) {
             this.snapshot = Collections.unmodifiableList(snapshot);
             this.totalElements = totalElements;
+            int successes 	= 0;
+            int failures 	= 0;
+            int cancelled 	= 0;
+            int notExecuted = 0;
+            Set<Integer> failedSet 		= new LinkedHashSet<>();
+            Set<Integer> cancelledSet 	= new LinkedHashSet<>();
+            Set<Integer> notExecSet 	= new LinkedHashSet<>();
+            
+            for (int i = 0; i< snapshot.size(); i++) {
+            	ElementResult<O> r = snapshot.get(i);
+            	if (r.isSuccess()) { successes++; }
+            	else if (r.isCancelled()) { cancelled++; cancelledSet.add(i); }
+            	else if (r.isNotExecuted()) { notExecuted++; notExecSet.add(i); }
+            	else { failures++; failedSet.add(i); }
+            }
+            this.successCount = successes;
+            this.failureCount = failures;
+            this.cancelledCount = cancelled;
+            this.notExecutedCount = notExecuted;
+            this.failedIndices = Collections.unmodifiableSet(failedSet);
+            this.cancelledIndices = Collections.unmodifiableSet(cancelledSet);
+            this.notExecutedIndices = Collections.unmodifiableSet(notExecSet);
         }
         
         /** Returns the ElementResult at index - always Success or Failure, never null. */
@@ -172,54 +202,30 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          *   }
          * }</pre>
          */
-        public List<ElementResult<O>> toResultList() {
-        	return snapshot;
-        }
+        public List<ElementResult<O>> toResultList() { return snapshot; }
  
         /** Indices of elements that failed. */
-        public Set<Integer> failedIndices() {
-            Set<Integer> failed = new LinkedHashSet<>();
-            for (int i = 0; i < totalElements; i++) {
-                if (get(i) instanceof Failure<O>) failed.add(i);
-            }
-            return Collections.unmodifiableSet(failed);
-        }
- 
+        public Set<Integer> failedIndices() { return failedIndices; }
+        /** Indices of elements that cancelled. */
+        public Set<Integer> cancelledIndices() { return cancelledIndices; }
+        /** Indices of elements that did not execute. */
+        public Set<Integer> notExecutedIndices() { return notExecutedIndices; }
         public boolean hasErrors() { return !failedIndices().isEmpty(); }
         public boolean hasIncomplete() { return !cancelledIndices().isEmpty() || !notExecutedIndices().isEmpty(); }
-        public Set<Integer> cancelledIndices() {
-            Set<Integer> set = new LinkedHashSet<>();
-            for (int i = 0; i < totalElements; i++) {
-                if (get(i).isCancelled()) set.add(i);
-            }
-            return Collections.unmodifiableSet(set);
-        }
- 
-        public Set<Integer> notExecutedIndices() {
-            Set<Integer> set = new LinkedHashSet<>();
-            for (int i = 0; i < totalElements; i++) {
-                if (get(i).isNotExecuted()) set.add(i);
-            }
-            return Collections.unmodifiableSet(set);
-        }
         
-        public int successCount() {
-            int c = 0;
-            for (int i = 0; i < totalElements; i++) if (get(i).isSuccess()) c++;
-            return c;
-        }
-        public int errorCount()       { return failedIndices().size(); }
-        public int cancelledCount()   { return cancelledIndices().size(); }
-        public int notExecutedCount() { return notExecutedIndices().size(); }
+        public int successCount() { return successCount; }
+        public int errorCount()       { return failureCount; }
+        public int cancelledCount()   { return cancelledCount; }
+        public int notExecutedCount() { return notExecutedCount; }
         public int totalCount()       { return totalElements; }
  
         @Override
         public String toString() {
             return "MapResult{total=" + totalElements
-                + ", succeeded=" + successCount()
-                + ", failed=" + errorCount()
-                + ", cancelled=" + cancelledCount()
-                + ", notExecuted=" + notExecutedCount() + "}";
+                + ", succeeded=" + successCount
+                + ", failed=" + failureCount
+                + ", cancelled=" + cancelledCount
+                + ", notExecuted=" + notExecutedCount + "}";
         }
     }
  
