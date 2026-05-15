@@ -6,12 +6,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.Function;
 
@@ -235,6 +237,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
     private final boolean continueOnError;
     private final long completionPollTimeoutMs;
     private final int maxInFlight;         // bounded window size(0 = use runtime limiter permits)
+    private final long cancellationGraceMs; // grace period for awaitCancellation
  
     private MapNode(
             String name,
@@ -242,7 +245,8 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             long globalTimeoutMs,
             long completionPollTimeoutMs,
             boolean continueOnError,
-            int maxInFlight
+            int maxInFlight,
+            long cancellationGraceMs
     ) {
         this.name = Objects.requireNonNull(name);
         this.mapFn = Objects.requireNonNull(mapFn);
@@ -250,6 +254,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
         this.completionPollTimeoutMs = completionPollTimeoutMs;
         this.continueOnError = continueOnError;
         this.maxInFlight = maxInFlight;
+        this.cancellationGraceMs = cancellationGraceMs;
     }
  
     @Override
@@ -318,7 +323,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                  future = ecs.poll(Math.max(pollTimeout, 1), TimeUnit.MILLISECONDS);
              } catch (InterruptedException e) {
                  Thread.currentThread().interrupt();
-                 cancelAll(submittedFutures);
+                 cancelAll(submittedFutures, context);
                  throw new RuntimeException("[MapNode:" + name + "] interrupted", e);
              }
   
@@ -335,12 +340,12 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                  indexed = future.get();
              } catch (InterruptedException e) {
                  Thread.currentThread().interrupt();
-                 cancelAll(submittedFutures);
+                 cancelAll(submittedFutures, context);
                  throw new RuntimeException("[MapNode:" + name + "] interrupted collecting result", e);
              } catch (ExecutionException e) {
                  // task body catches all exceptions internally, this path means
                  // something went deeply wrong (e.g. Error, not Exception). Cancel everything and propagate immediately.
-                 cancelAll(submittedFutures);
+                 cancelAll(submittedFutures, context);
                  Throwable cause = e.getCause() != null ? e.getCause() : e;
                  throw new RuntimeException(
                      "[MapNode:" + name + "] unexpected task-level failure — "
@@ -355,7 +360,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
   
              // cancel ALL before throwing on fail-fast
              if (failFast && !indexed.result().isSuccess()) {
-                 cancelAll(submittedFutures);
+                 cancelAll(submittedFutures, context);
                  throw new MapElementException(
                      name, indexed.index(), ((Failure<O>) indexed.result()).error()
                  );
@@ -370,7 +375,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          }
          // cancel in-flight, mark with distinct Cancelled vs NotExecuted
          if (deadlineExceeded) {
-             cancelAll(submittedFutures); 
+             cancelAll(submittedFutures, context); 
              String timeoutReason = "Global timeout of " + globalTimeoutMs + "ms exceeded";
              for (int i = 0; i < elements.size(); i++) {
                  // distinguish submitted-but-cancelled from never-submitted
@@ -447,11 +452,49 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
     }
     
     /** skip already-done futures */
-    private void cancelAll(List<Future<IndexedResult<O>>> futures) {
+    private void cancelAll(List<Future<IndexedResult<O>>> futures, NodeContext context) {
+    	int cancelled = 0;
         for (Future<IndexedResult<O>> f : futures) {
             if (!f.isDone()) {
                 f.cancel(true);
+                cancelled++;
             }
+        }
+        if (cancelled == 0 || cancellationGraceMs <= 0) return;
+        // Give interrupted tasks a brief window to notice the interrupt and exit cleanly.
+        // This does not guarantee termination, interruption-insensitive mappers
+        // (blocking HTTP, Thread.sleep ignoring interrupt) will keep running past this.
+        // Grace period is a best-effort courtesy, not a hard barrier.
+        context.getLogger().info(
+            "[MapNode:" + name + "] Cancelled " + cancelled + " task(s). "
+                + "Waiting up to " + cancellationGraceMs + "ms grace period for clean exit."
+        );
+
+        long graceDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(cancellationGraceMs);
+        for (Future<IndexedResult<O>> f : futures) {
+            if (f.isDone()) continue;
+            long remaining = TimeUnit.NANOSECONDS.toMillis(graceDeadline - System.nanoTime());
+            if (remaining <= 0) break;
+            try {
+                f.get(remaining, TimeUnit.MILLISECONDS);
+            } catch (CancellationException ignored) {
+                // expected - task was cancelled
+            } catch (TimeoutException ignored) {
+                // grace expired - task still running, nothing more we can do
+            } catch (ExecutionException ignored) {
+                // task threw after cancel - still counts as done
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        long stillRunning = futures.stream().filter(f -> !f.isDone()).count();
+        if (stillRunning > 0) {
+            context.getLogger().warning(
+                "[MapNode:" + name + "] " + stillRunning + " task(s) still running after grace period. "
+                    + "These are interruption-insensitive - configure SDK-level timeouts in your mapper."
+            );
         }
     }
     
@@ -509,6 +552,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
         private long completionPollTimeoutMs = 0L;
         private boolean continueOnError      = false;
         private int maxInFlight              = 0;
+        private long cancellationGraceMs 	 = 500L;
  
         public Builder<I, O> mapWith(Function<I, O> fn) {
             this.mapFn = Objects.requireNonNull(fn);
@@ -551,13 +595,18 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             this.continueOnError = true;
             return this;
         }
+        
+        public Builder<I, O> cancellationGrace(long duration, TimeUnit unit) {
+        	this.cancellationGraceMs = unit.toMillis(duration);
+        	return this;
+        }
  
         public MapNode<I, O> build(String nodeName) {
             if (mapFn == null) {
                 throw new IllegalStateException("MapNode [" + nodeName + "] requires mapWith()");
             }
             return new MapNode<>(nodeName, mapFn, globalTimeoutMs,
-                completionPollTimeoutMs, continueOnError, maxInFlight);
+                completionPollTimeoutMs, continueOnError, maxInFlight, cancellationGraceMs);
         }
     }
     
