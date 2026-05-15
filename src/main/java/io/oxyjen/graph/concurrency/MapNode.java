@@ -279,7 +279,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          boolean failFast         = runtime.getFailureMode() == ExecutionRuntime.FailureMode.FAIL_FAST
                                     && !continueOnError;
   
-         int windowSize = maxInFlight > 0 ? maxInFlight : limiter.availablePermits();
+         int windowSize = maxInFlight > 0 ? maxInFlight : runtime.getMaxConcurrency();
          if (windowSize <= 0) windowSize = Runtime.getRuntime().availableProcessors();
          context.getLogger().info(
         		 "[MapNode:" + name + "] Mapping " + elements.size()

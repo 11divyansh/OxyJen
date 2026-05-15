@@ -53,18 +53,21 @@ public final class ExecutionRuntime {
     private final FailureMode failureMode;
     private final long defaultTimeoutMs;
     private final MetricsRegistry metrics;
+    private final int maxConcurrency;
  
     private ExecutionRuntime(
             ExecutorService executor,
             Semaphore limiter,
             FailureMode failureMode,
-            long defaultTimeoutMs
+            long defaultTimeoutMs,
+            int maxConcurrency
     ) {
         this.executor = executor;
         this.limiter = limiter;
         this.failureMode = failureMode;
         this.defaultTimeoutMs = defaultTimeoutMs;
         this.metrics = new MetricsRegistry();
+        this.maxConcurrency = maxConcurrency;
     }
  
     public ExecutorService getExecutor() {
@@ -85,6 +88,10 @@ public final class ExecutionRuntime {
     
     public MetricsRegistry getMetrics() {
         return metrics;
+    }
+    
+    public int getMaxConcurrency() {
+        return maxConcurrency;
     }
  
     public static Builder builder() {
@@ -158,7 +165,8 @@ public final class ExecutionRuntime {
                 executor,
                 new Semaphore(maxConcurrency),
                 failureMode,
-                defaultTimeoutMs
+                defaultTimeoutMs,
+                maxConcurrency
             );
         }
     }
