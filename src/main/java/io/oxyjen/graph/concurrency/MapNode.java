@@ -113,7 +113,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
      */
      public static final class MapResult<O> {
  
-        private final List<ElementResult<O>> snapshot;       // null at index i = element i failed
+        private final List<ElementResult<O>> snapshot;
         private final int totalElements;
         
         private final int successCount;
