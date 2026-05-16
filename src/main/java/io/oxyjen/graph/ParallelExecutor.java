@@ -171,12 +171,16 @@ public class ParallelExecutor {
             Set<NodePlugin<?, ?>> cyclicTargets,
             Set<CompletableFuture<?>> allFutures
     ) {
+    	Semaphore limiter = runtime.getLimiter();
+    	try {
+    	    limiter.acquire();
+    	} catch (InterruptedException e) {
+    	    Thread.currentThread().interrupt();
+    	    throw new RuntimeException("[DAG] Interrupted waiting for limiter: " + node.getName(), e);
+    	}
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
-        	boolean acquired = false;
-        	Semaphore limiter = runtime.getLimiter();
+        	//boolean acquired = false;
         	try {
-        		limiter.acquire();
-        		acquired = true;
         		context.getLogger().info("[DAG] Executing: " + node.getName());
         		NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
         		safeNode.onStart(context);
@@ -222,9 +226,7 @@ public class ParallelExecutor {
                 }
                 return null; // fallback
             } finally {
-            	if (acquired) {
-            		limiter.release();
-            	}
+            	limiter.release();
             }           
         }, runtime.getExecutor()).thenAccept(output -> {
             if (output == null) {
