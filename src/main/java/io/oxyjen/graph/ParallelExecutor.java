@@ -181,8 +181,8 @@ public class ParallelExecutor {
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
         	//boolean acquired = false;
         	try {
-        		context.getLogger().info("[DAG] Executing: " + node.getName());
         		NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
+        		context.getLogger().info("[DAG] Executing: " + node.getName());
         		safeNode.onStart(context);
                 Object output = safeNode.process(input, context);
                 safeNode.onFinish(context);
@@ -228,10 +228,10 @@ public class ParallelExecutor {
             } finally {
             	limiter.release();
             }           
-        }, runtime.getExecutor()).thenAccept(output -> {
+        }, runtime.getExecutor()).thenCompose(output -> {
             if (output == null) {
                 inProgress.remove(node);
-                return;
+                return CompletableFuture.completedFuture(null);
             }
             if (output instanceof NodeFailure failure) {
                 context.getLogger().warning(
@@ -240,19 +240,27 @@ public class ParallelExecutor {
             }
             if (output instanceof BranchNode.RoutedResult routed) {
                 NodePlugin<?, ?> target = graph.findNodeByName(routed.nextNode());
-                executeNodeAsync(target, routed.output(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
-                inProgress.remove(node);
-                return;
+                CompletableFuture<Void> branch = executeNodeAsync(target, routed.output(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
+                CompletableFuture<Void> composed = branch.thenRun(() -> inProgress.remove(node));
+                allFutures.add(composed);
+                return composed;
             }
             if (output instanceof RouterNode.RoutedResult routed) {
+            	List<CompletableFuture<Void>> routerFutures = new ArrayList<>();
                 for (Map.Entry<String, Object> entry : routed.routes().entrySet()) {
                     NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
                     if (scheduled.add(target.getName())) {
-                        executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
+                        routerFutures.add(executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures));
                     }
                 }
+                if (!routerFutures.isEmpty()) {
+                    CompletableFuture<Void> composed = CompletableFuture.allOf(routerFutures.toArray(new CompletableFuture[0]))
+                        .thenRun(() -> inProgress.remove(node));
+                    allFutures.add(composed);
+                    return composed;
+                }
                 inProgress.remove(node);
-                return;
+                return CompletableFuture.completedFuture(null);
             }
 
             List<CompletableFuture<Void>> downstream = new ArrayList<>();
@@ -279,9 +287,14 @@ public class ParallelExecutor {
                 }
             }
             if (!downstream.isEmpty()) {
-                CompletableFuture.allOf(downstream.toArray(new CompletableFuture[0])).join();
+            	CompletableFuture<Void> composed = CompletableFuture
+            	        .allOf(downstream.toArray(new CompletableFuture[0]))
+            	        .thenRun(() -> inProgress.remove(node));
+            	allFutures.add(composed);
+            	return composed;
             }
             inProgress.remove(node);
+            return CompletableFuture.completedFuture(null);
         });
     	allFutures.add(future);
     	return future; 
