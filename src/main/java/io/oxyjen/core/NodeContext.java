@@ -3,7 +3,10 @@ package io.oxyjen.core;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 
 import io.oxyjen.core.exceptions.ExceptionHandler;
@@ -24,9 +27,22 @@ public class NodeContext {
     private volatile OxyLogger oxyjenLogger;
     private volatile ExceptionHandler exceptionHandler;
 
-    // v0.5: single shared runtime injected by ParallelExecutor before traversal
+    // single shared runtime injected by ParallelExecutor before traversal
     private ExecutionRuntime runtime;
     
+    // lock-free gather slots - one queue per slot
+    private final ConcurrentMap<String, ConcurrentLinkedQueue<Object>> gatherSlots = new ConcurrentHashMap<>();
+    
+    /** Each slot is lock-free {@link ConcurrentLinkedQueue} - parallel branches
+     *  accumulate concurrently with no contention across different slots.
+     **/
+    public ConcurrentMap<String, ConcurrentLinkedQueue<Object>> getGatherSlots() {
+    	return gatherSlots;
+    }
+    // to do context.gatherSlot(slotName).add(value);
+    public Queue<Object> gatherSlot(String name) {
+    	return gatherSlots.computeIfAbsent(name, k -> new ConcurrentLinkedQueue<>());
+    }
     /**
      * Returns the shared {@link ExecutionRuntime} for this graph execution.
      *
