@@ -20,6 +20,11 @@ import java.util.function.Function;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionRuntime;
+import io.oxyjen.execution.result.Cancelled;
+import io.oxyjen.execution.result.Failure;
+import io.oxyjen.execution.result.NotExecuted;
+import io.oxyjen.execution.result.Success;
+import io.oxyjen.execution.result.TaskResult;
 
 /**
  * Applies a processing function to every element of an input collection concurrently.
@@ -57,50 +62,8 @@ import io.oxyjen.execution.ExecutionRuntime;
  * @param <O> The output type produced by the mapping function.
  */
 public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<O>> {
- 
-	 public sealed interface ElementResult<T> permits MapNode.Success, MapNode.Failure, MapNode.Cancelled, MapNode.NotExecuted {
-		 boolean isSuccess();
-		 default boolean isCancelled() { return false; }
-		 default boolean isNotExecuted() { return false; }
-	 }
 	 
-	 public static final class Success<T> implements ElementResult<T> {
-		 private final T value;
-	     public Success(T value) { this.value = value; }  // null is a valid success value}
-	     public T value() { return value; }
-	     @Override public boolean isSuccess() { return true; }
-	     @Override public String toString() { return "Success(" + value + ")"; }
-	 }
-	 
-	 public static final class Failure<T> implements ElementResult<T> {
-	     private final Throwable error;
-	     public Failure(Throwable error) { this.error = Objects.requireNonNull(error); }
-	     public Throwable error() { return error; }
-	     @Override public boolean isSuccess() { return false; }
-	     @Override public String toString() { return "Failure(" + error.getMessage() + ")"; }
-	 }
-	 
-	 /** Element was submitted and running but cancelled (timeout or fail-fast). */
-	 public static final class Cancelled<T> implements ElementResult<T> {
-	     private final String reason;
-	     public Cancelled(String reason)        { this.reason = reason; }
-	     public String reason()                 { return reason; }
-	     @Override public boolean isSuccess()   { return false; }
-	     @Override public boolean isCancelled() { return true; }
-	     @Override public String toString()     { return "Cancelled(" + reason + ")"; }
-     }
-	 
-	 /** Element was never submitted - window full when deadline hit. */
-	 public static final class NotExecuted<T> implements ElementResult<T> {
-	     private final String reason;
-	     public NotExecuted(String reason)       { this.reason = reason; }
-         public String reason()                  { return reason; }
-	     @Override public boolean isSuccess()    { return false; }
-	     @Override public boolean isNotExecuted(){ return true; }
-	     @Override public String toString()      { return "NotExecuted(" + reason + ")"; }
-	 }
-	 
-	 private record IndexedResult<O>(int index, ElementResult<O> result) {
+	 private record IndexedResult<O>(int index, TaskResult<O> result) {
 		 IndexedResult {
 			 if (index < 0) throw new IllegalArgumentException("index must be >= 0, got: " + index);
 	     }
@@ -113,7 +76,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
      */
      public static final class MapResult<O> {
  
-        private final List<ElementResult<O>> snapshot;
+        private final List<TaskResult<O>> snapshot;
         private final int totalElements;
         
         private final int successCount;
@@ -124,7 +87,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
         private final Set<Integer> cancelledIndices;
         private final Set<Integer> notExecutedIndices;
  
-        MapResult(List<ElementResult<O>> snapshot, int totalElements) {
+        MapResult(List<TaskResult<O>> snapshot, int totalElements) {
             this.snapshot = Collections.unmodifiableList(snapshot);
             this.totalElements = totalElements;
             int successes 	= 0;
@@ -136,7 +99,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             Set<Integer> notExecSet 	= new LinkedHashSet<>();
             
             for (int i = 0; i< snapshot.size(); i++) {
-            	ElementResult<O> r = snapshot.get(i);
+            	TaskResult<O> r = snapshot.get(i);
             	if (r.isSuccess()) { successes++; }
             	else if (r.isCancelled()) { cancelled++; cancelledSet.add(i); }
             	else if (r.isNotExecuted()) { notExecuted++; notExecSet.add(i); }
@@ -152,7 +115,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
         }
         
         /** Returns the ElementResult at index - always Success or Failure, never null. */
-        public ElementResult<O> get(int index) {
+        public TaskResult<O> get(int index) {
             return snapshot.get(index);
         }
  
@@ -204,7 +167,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          *   }
          * }</pre>
          */
-        public List<ElementResult<O>> toResultList() { return snapshot; }
+        public List<TaskResult<O>> toResultList() { return snapshot; }
  
         /** Indices of elements that failed. */
         public Set<Integer> failedIndices() { return failedIndices; }
@@ -263,7 +226,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          input.forEach(elements::add);
          if (elements.isEmpty()) {
              context.getLogger().info("[MapNode:" + name + "] Empty input.");
-             return new MapResult<O>(Collections.<ElementResult<O>>emptyList(), 0);
+             return new MapResult<O>(Collections.<TaskResult<O>>emptyList(), 0);
          }
   
          ExecutionRuntime runtime = context.getRuntime();
@@ -287,7 +250,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                     + ", globalTimeout=" + globalTimeoutMs + "ms"
                     + (completionPollTimeoutMs > 0 ? ", pollTimeout=" + completionPollTimeoutMs + "ms" : "")
          );
-         AtomicReferenceArray<ElementResult<O>> results = new AtomicReferenceArray<>(elements.size());
+         AtomicReferenceArray<TaskResult<O>> results = new AtomicReferenceArray<>(elements.size());
          long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(globalTimeoutMs);
          ExecutorCompletionService<IndexedResult<O>> ecs = new ExecutorCompletionService<>(executor);
          List<Future<IndexedResult<O>>> submittedFutures = new ArrayList<>(elements.size());
@@ -399,7 +362,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          }
   
          // Freeze snapshot, no more mutations possible after this point
-         List<ElementResult<O>> snapshot = freezeSnapshot(results, elements.size());
+         List<TaskResult<O>> snapshot = freezeSnapshot(results, elements.size());
          MapResult<O> result = new MapResult<>(snapshot, elements.size());
          context.getLogger().info(
              "[MapNode:" + name + "] Done - " + result
@@ -499,12 +462,12 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
     }
     
     /** Drains AtomicReferenceArray into immutable snapshot. */
-    private List<ElementResult<O>> freezeSnapshot(
-            AtomicReferenceArray<ElementResult<O>> arr, int size
+    private List<TaskResult<O>> freezeSnapshot(
+            AtomicReferenceArray<TaskResult<O>> arr, int size
     ) {
-        List<ElementResult<O>> list = new ArrayList<>(size);
+        List<TaskResult<O>> list = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            ElementResult<O> r = arr.get(i);
+            TaskResult<O> r = arr.get(i);
             list.add(r != null ? r : new NotExecuted<>("Result slot empty after collection"));
         }
         return list;
@@ -513,7 +476,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
     /** Fallback when no runtime is available - runs elements sequentially. */
     private MapResult<O> runSequential(List<I> elements, NodeContext context) {
     	long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(globalTimeoutMs);
-    	List<ElementResult<O>> results = new ArrayList<>(elements.size());
+    	List<TaskResult<O>> results = new ArrayList<>(elements.size());
         for (int i = 0; i < elements.size(); i++) {
         	if (System.nanoTime() > deadline) {
                 String reason = "Sequential timeout after " + globalTimeoutMs + "ms";

@@ -19,6 +19,11 @@ import java.util.function.Function;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionRuntime;
+import io.oxyjen.execution.result.Cancelled;
+import io.oxyjen.execution.result.Failure;
+import io.oxyjen.execution.result.NotExecuted;
+import io.oxyjen.execution.result.Success;
+import io.oxyjen.execution.result.TaskResult;
 
 /**
 * Executes a fixed set of {@link NodePlugin}s concurrently, all receiving the same input.
@@ -39,35 +44,96 @@ import io.oxyjen.execution.ExecutionRuntime;
 public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelResult<O>> {
 	
 	public static final class ParallelResult<O> {
-        private final Map<String, O> outputs;
-        private final Map<String, Throwable> errors;
+		private final Map<String, TaskResult<O>> results;
+        private final Map<String, O> successfulOutputs;
+        private final Map<String, Throwable> failures;
+        
         private final List<String> completionOrder;
 
+        private final int successCount;
+        private final int failureCount;
+        private final int cancelledCount;
+        private final int notExecutedCount;
+
         ParallelResult(
-                Map<String, O> outputs,
-                Map<String, Throwable> errors,
+        		Map<String, TaskResult<O>> results,
                 List<String> completionOrder
         ) {
-            this.outputs = Collections.unmodifiableMap(new LinkedHashMap<>(outputs));
-            this.errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
+            this.results = Collections.unmodifiableMap(new LinkedHashMap<>(results));
+            Map<String, O> outputs = new LinkedHashMap<>();
+            Map<String, Throwable> errors = new LinkedHashMap<>();
+            int successes = 0;
+            int failures = 0;
+            int cancelled = 0;
+            int notExecuted = 0;
+            for (Map.Entry<String, TaskResult<O>> entry : results.entrySet()) {
+                String name = entry.getKey();
+                TaskResult<O> result = entry.getValue();
+                if (result instanceof Success<O> s) {
+                    outputs.put(name, s.value());
+                    successes++;
+
+                } else if (result instanceof Failure<O> f) {
+                    errors.put(name, f.error());
+                    failures++;
+
+                } else if (result instanceof Cancelled<O>) {
+                    cancelled++;
+
+                } else if (result instanceof NotExecuted<O>) {
+                    notExecuted++;
+                }
+            }
+
+            this.successfulOutputs = Collections.unmodifiableMap(outputs);
+            this.failures = Collections.unmodifiableMap(errors);
+            this.successCount = successes;
+            this.failureCount = failures;
+            this.cancelledCount = cancelled;
+            this.notExecutedCount = notExecuted;
             this.completionOrder = Collections.unmodifiableList(new ArrayList<>(completionOrder));
         }
 
-        public O get(String name) { return outputs.get(name); }
-        public O getOrDefault(String name, O def) { return outputs.getOrDefault(name, def); }
-        public boolean succeeded(String name) { return outputs.containsKey(name); }
-        public boolean failed(String name) { return errors.containsKey(name); }
-        public Throwable getError(String name) { return errors.get(name); }
-        public Map<String, O> allOutputs() { return outputs; }
-        public Map<String, Throwable> allErrors() { return errors; }
-        public boolean hasErrors() { return !errors.isEmpty(); }
+        public TaskResult<O> get(String name) { return results.get(name); }
+        public O getOrDefault(String name, O def) { 
+        	TaskResult<O> result = results.get(name);
+        	if (result instanceof Success<O> s) {
+        		return s.value();
+        	}
+        	return def;
+        }
+        public boolean succeeded(String name) { return results.get(name) instanceof Success<?>; }
+        public boolean failed(String name) { return results.get(name) instanceof Failure<?>; }
+        public boolean cancelled(String name) { return results.get(name) instanceof Cancelled<?>; }
+        public boolean notExecuted(String name) { return results.get(name) instanceof NotExecuted<?>; }
+        public Throwable getError(String name) { 
+        	TaskResult<O> result = results.get(name);
+        	if (result instanceof Failure<O> f) {
+        		return f.error();
+        	}
+        	return null; 
+        }
+        public Map<String, TaskResult<O>> allResults() { return results; }
+        public Map<String, O> allOutputs() { return successfulOutputs; }
+        public Map<String, Throwable> allErrors() { return failures; }
+        public boolean hasErrors() { return failureCount > 0; }
+        public int successCount() { return successCount; }
+        public int failureCount() { return failureCount; }
+        public int cancelledCount() { return cancelledCount; }
+        public int notExecutedCount() { return notExecutedCount; }
         public List<String> completionOrder() { return completionOrder; }
-        public int successCount() { return outputs.size(); }
-        public int errorCount() { return errors.size(); }
+        public boolean hasIncomplete() { return cancelledCount > 0 || notExecutedCount > 0; }
         @Override
         public String toString() {
-            return "ParallelResult{succeeded=" + outputs.keySet()
-                + ", failed=" + errors.keySet() + "}";
+            return "ParallelResult{success="
+                + successCount
+                + ", failed="
+                + failureCount
+                + ", cancelled="
+                + cancelledCount
+                + ", notExecuted="
+                + notExecutedCount
+                + "}";
         }
     }
 
