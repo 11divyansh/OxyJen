@@ -8,12 +8,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
@@ -168,20 +170,22 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         ExecutionRuntime.FailureMode failureMode = runtime.getFailureMode();
         long timeout = timeoutMs > 0 ? timeoutMs : runtime.getDefaultTimeoutMs();
         context.getLogger().info("[ParallelNode:" + name + "] Starting " + tasks.size() + " tasks");
-        Map<String, O> outputs = new ConcurrentHashMap<>();
-        Map<String, Throwable> errors = new ConcurrentHashMap<>();
+        Map<String, TaskResult<O>> results = new ConcurrentHashMap<>();
         List<String> completionOrder = Collections.synchronizedList(new ArrayList<>());
-        Map<String, CompletableFuture<O>> futures = new LinkedHashMap<>();
+        Map<String, CompletableFuture<TaskResult<O>>> futures = new LinkedHashMap<>();
         for (Task<I, O> task : tasks) {
-            CompletableFuture<O> future = CompletableFuture.supplyAsync(() -> {
+            CompletableFuture<TaskResult<O>> future = CompletableFuture.supplyAsync(() -> {
                 boolean acquired = false;
                 try {
                     limiter.acquire();
                     acquired = true;
-                    return task.fn().apply(input);
+                    O value = task.fn().apply(input);
+                    return new Success<>(value);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
+                    return new Cancelled<>("Interrupted");
+                } catch (Exception e) {
+                	return new Failure<>(e);
                 } finally {
                     if (acquired) limiter.release();
                 }
@@ -191,59 +195,59 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         List<CompletableFuture<Void>> collectors = new ArrayList<>();
         for (var entry : futures.entrySet()) {
             String taskName = entry.getKey();
-            CompletableFuture<O> future = entry.getValue();
+            CompletableFuture<TaskResult<O>> future = entry.getValue();
             collectors.add(
-                future.handle((result, ex) -> {
-                    if (ex != null) {
-                        Throwable cause = (ex instanceof CompletionException)
-                                ? ex.getCause()
-                                : ex;
-                        if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
-                            cancelAll(futures);
-                            throw new CompletionException(cause);
-                        } else {
-                            errors.put(taskName, cause);
-                        }
-                    } else {
-                        outputs.put(taskName, result);
-                    }
+                future.thenAccept(result -> {
+                    results.put(taskName, result);
                     completionOrder.add(taskName);
-                    return null;
+                    if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST && result instanceof Failure<?>) {
+                    	cancelAll(futures);
+                    	throw new CompletionException(((Failure<O>) result).error());
+                    } 
                 })
             );
         }
         CompletableFuture<Void> all =
                 CompletableFuture.allOf(collectors.toArray(new CompletableFuture[0]))
-                        .orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
+                        .orTimeout(timeout, TimeUnit.MILLISECONDS);
         try {
             all.join();
-        } catch (CompletionException e) {
+        } catch (CompletionException | CancellationException e) {
             cancelAll(futures);
-            if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
-                throw new RuntimeException("[ParallelNode:" + name + "] failed", e.getCause());
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof TimeoutException) {
+            	futures.forEach((name, future) -> {
+            		results.putIfAbsent(name, new Cancelled<>("Timed out"));
+            	});
+            } else if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
+                throw new RuntimeException("[ParallelNode:" + name + "] failed", cause);
             }
         }
+        ParallelResult<O> result = new ParallelResult<>(results, completionOrder);
         context.getLogger().info(
-                "[ParallelNode:" + name + "] Done. success=" + outputs.size() +
-                " errors=" + errors.size()
-        );
-        return new ParallelResult<>(outputs, errors, completionOrder);
+        	    "[ParallelNode:" + name + "] Done. success="
+        	        + result.successCount()
+        	        + " failures="
+        	        + result.failureCount()
+        	        + " cancelled="
+        	        + result.cancelledCount()
+       );
+        return result;
     }
 
     private ParallelResult<O> runSequential(I input, NodeContext context) {
-        Map<String, O> outputs = new LinkedHashMap<>();
-        Map<String, Throwable> errors = new LinkedHashMap<>();
+    	Map<String, TaskResult<O>> results = new LinkedHashMap<>();
         List<String> order = new ArrayList<>();
  
         for (Task<I, O> task : tasks) {
             try {
-                outputs.put(task.name(), task.fn().apply(input));
+                results.put(task.name(), new Success<>(task.fn().apply(input)));
             } catch (Exception e) {
-                errors.put(task.name(), e);
+                results.put(task.name(), new Failure<>(e));
             }
             order.add(task.name());
         }
-        return new ParallelResult<>(outputs, errors, order);
+        return new ParallelResult<>(results, order);
     }
     private void cancelAll(Map<String, ? extends CompletableFuture<?>> futures) {
         futures.values().forEach(f -> f.cancel(true));
