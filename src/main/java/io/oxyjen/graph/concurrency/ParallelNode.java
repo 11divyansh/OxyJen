@@ -144,15 +144,18 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
     private final String name;
     private final List<Task<I, O>> tasks;
     private final long timeoutMs;
+    private final boolean continueOnError;
 
     private ParallelNode(
             String name,
             List<Task<I, O>> tasks,
-            long timeoutMs
+            long timeoutMs,
+            boolean continueOnError
     ) {
         this.name = name;
         this.tasks = List.copyOf(tasks);
         this.timeoutMs = timeoutMs;
+        this.continueOnError = continueOnError;
     }
 
     @Override
@@ -173,6 +176,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         Map<String, TaskResult<O>> results = new ConcurrentHashMap<>();
         List<String> completionOrder = Collections.synchronizedList(new ArrayList<>());
         Map<String, CompletableFuture<TaskResult<O>>> futures = new LinkedHashMap<>();
+        boolean failFast = failureMode == ExecutionRuntime.FailureMode.FAIL_FAST && !continueOnError;
         for (Task<I, O> task : tasks) {
             CompletableFuture<TaskResult<O>> future = CompletableFuture.supplyAsync(() -> {
                 boolean acquired = false;
@@ -200,15 +204,20 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
                 future.thenAccept(result -> {
                     results.put(taskName, result);
                     completionOrder.add(taskName);
-                    if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST && result instanceof Failure<?>) {
+                    if (failFast && result instanceof Failure<?>) {
                     	cancelAll(futures);
+                    	futures.forEach((name, f) -> {
+                    	    results.putIfAbsent(
+                    	        name,
+                    	        new Cancelled<>("Cancelled due to fail-fast")
+                    	    );
+                    	});
                     	throw new CompletionException(((Failure<O>) result).error());
                     } 
                 })
             );
         }
-        CompletableFuture<Void> all =
-                CompletableFuture.allOf(collectors.toArray(new CompletableFuture[0]))
+        CompletableFuture<Void> all = CompletableFuture.allOf(collectors.toArray(new CompletableFuture[0]))
                         .orTimeout(timeout, TimeUnit.MILLISECONDS);
         try {
             all.join();
@@ -219,7 +228,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
             	futures.forEach((name, future) -> {
             		results.putIfAbsent(name, new Cancelled<>("Timed out"));
             	});
-            } else if (failureMode == ExecutionRuntime.FailureMode.FAIL_FAST) {
+            } else if (failFast) {
                 throw new RuntimeException("[ParallelNode:" + name + "] failed", cause);
             }
         }
@@ -232,7 +241,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         	        + " cancelled="
         	        + result.cancelledCount()
        );
-        return result;
+       return result;
     }
 
     private ParallelResult<O> runSequential(I input, NodeContext context) {
@@ -264,6 +273,7 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
     public static class Builder<I, O> {
         private final List<Task<I, O>> tasks = new ArrayList<>();
         private long timeoutMs = 0;
+        private boolean continueOnError = false;
 
         public Builder<I, O> task(String name, Function<I, O> fn) {
             Objects.requireNonNull(name);
@@ -274,6 +284,11 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
 
         public Builder<I, O> timeout(long duration, TimeUnit unit) {
             this.timeoutMs = unit.toMillis(duration);
+            return this;
+        }
+        
+        public Builder<I, O> continueOnError() {
+            this.continueOnError = true;
             return this;
         }
 
@@ -290,7 +305,8 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
             return new ParallelNode<>(
                     name,
                     tasks,
-                    timeoutMs
+                    timeoutMs,
+                    continueOnError
             );
         }
     }
