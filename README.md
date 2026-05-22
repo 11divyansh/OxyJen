@@ -284,7 +284,6 @@ class FormatterNode implements NodePlugin<String, String> {
 - **Multi-tenancy** - Isolate data between users/orgs
 - **Async execution** - Run nodes in parallel
 - **DAG support** - Complex branching workflows
-- **Conditional routing** - "If X, then run node Y"
 - **Circuit breakers** - Fail fast when services are down
 - **Streaming responses**
 - **Token counting & cost tracking**
