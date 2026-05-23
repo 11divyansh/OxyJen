@@ -18,7 +18,7 @@ import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.ParallelExecutor;
 import io.oxyjen.graph.branching.BranchNode;
 
-class BranchNodeTest {
+class BranchNodeTest2 {
 
 	 static class AppendNode implements NodePlugin<String, String> {
 	        private final String suffix;

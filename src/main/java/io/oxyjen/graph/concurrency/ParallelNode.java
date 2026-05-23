@@ -125,6 +125,12 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         public int notExecutedCount() { return notExecutedCount; }
         public List<String> completionOrder() { return completionOrder; }
         public boolean hasIncomplete() { return cancelledCount > 0 || notExecutedCount > 0; }
+        public static <O> ParallelResult<O> of(
+                Map<String, TaskResult<O>> results,
+                List<String> completionOrder
+        ) {
+            return new ParallelResult<>(results, completionOrder);
+        }
         @Override
         public String toString() {
             return "ParallelResult{success="

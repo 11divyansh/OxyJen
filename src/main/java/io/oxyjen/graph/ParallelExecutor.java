@@ -64,11 +64,6 @@ public class ParallelExecutor {
         	NodePlugin<?, ?> actual = node.unwrap();
             if (actual instanceof MergeNode merge) {
                 merge.register(context);
-                if (scheduled.add(node.getName())) {
-                    rootFutures.add(
-                        executeNodeAsync(node, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
-                    );
-                }
             }
         }
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
@@ -264,13 +259,33 @@ public class ParallelExecutor {
             }
 
             List<CompletableFuture<Void>> downstream = new ArrayList<>();
+            boolean traversedCycle = false;
             for (Edge edge : graph.getEdgesFrom(node)) {
+                if (!(edge instanceof CyclicEdge)) {
+                    continue;
+                }
                 boolean decision = (output instanceof NodeFailure failure)
                         ? edge.shouldTraverseFailure(failure, context)
                         : edge.shouldTraverse(output, context);
-                //if (!decision) continue;
-                NodePlugin<?, ?> target = edge.getTarget().unwrap();
-                if (target instanceof MergeNode merge && !(node instanceof MergeNode)) {
+                if (!decision) continue;
+                NodePlugin<?, ?> target = edge.getTarget();
+                traversedCycle = true;
+                downstream.add(
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                );
+            }
+            if (!traversedCycle) {
+            for (Edge edge : graph.getEdgesFrom(node)) {
+                if (edge instanceof CyclicEdge) {
+                    continue;
+                }
+                boolean decision = (output instanceof NodeFailure failure)
+                        ? edge.shouldTraverseFailure(failure, context)
+                        : edge.shouldTraverse(output, context);
+                if (!decision) continue;
+                NodePlugin<?, ?> target = edge.getTarget();
+                NodePlugin<?, ?> actualTarget = target.unwrap();
+                if (actualTarget instanceof MergeNode merge && !(node.unwrap() instanceof MergeNode)) {
                     merge.contribute(node.getName(), output, context);
                     if (scheduled.add(merge.getName())) {
                         downstream.add(
@@ -279,12 +294,11 @@ public class ParallelExecutor {
                     }
                     continue;
                 }
-                if (!decision) continue;
-                if (scheduled.add(target.getName())) {
-                    downstream.add(
-                        executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
-                    );
-                }
+                //if (!decision) continue;
+                downstream.add(
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                );
+            }
             }
             if (!downstream.isEmpty()) {
             	CompletableFuture<Void> composed = CompletableFuture

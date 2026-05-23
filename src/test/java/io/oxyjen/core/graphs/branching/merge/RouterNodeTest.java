@@ -39,7 +39,7 @@ class CollectNode implements NodePlugin<String, String> {
 }
 class RouterNodeTest {
 
-	//@Test
+	@Test
 	void router_single_route() {
 	    Graph graph = GraphBuilder.named("single-route")
 	        .addNode("router",
@@ -57,7 +57,7 @@ class RouterNodeTest {
 	    assertEquals("apple_A", result.get("A"));
 	}
 	
-	//@Test
+	@Test
 	void router_multi_route_parallel() {
 	    Graph graph = GraphBuilder.named("fanout")
 	        .addNode("router",
@@ -78,7 +78,7 @@ class RouterNodeTest {
 	    assertEquals("ab_B", result.get("B"));
 	}
 	
-	//@Test
+	@Test
 	void router_no_route_fires() {
 	    Graph graph = GraphBuilder.named("no-route")
 	        .addNode("router",
@@ -94,7 +94,7 @@ class RouterNodeTest {
 	    Map<String, Object> result = executor.run(graph, "xyz", ctx);
 	    assertTrue(result.isEmpty() || result.get("A") == null);
 	}
-	//@Test
+	@Test
 	void router_require_at_least_one() {
 	    Graph graph = GraphBuilder.named("require-route")
 	        .addNode("router",
@@ -112,7 +112,7 @@ class RouterNodeTest {
 	        executor.run(graph, "xyz", ctx)
 	    );
 	}
-	//@Test
+	@Test
 	void router_with_transform() {
 	    Graph graph = GraphBuilder.named("transform")
 	        .addNode("router",
@@ -134,7 +134,7 @@ class RouterNodeTest {
 	    }
 	}
 
-	//@Test
+	@Test
 	void router_with_failure_collect_mode() {
 	    ExecutionRuntime runtime = ExecutionRuntime.defaultRuntime()
 	        .builder().failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS).build();

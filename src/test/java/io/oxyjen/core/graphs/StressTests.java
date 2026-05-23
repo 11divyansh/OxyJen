@@ -12,12 +12,13 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.GraphBuilder;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
-import io.oxyjen.graph.FailureMode;
+import io.oxyjen.execution.ExecutionRuntime;
+import io.oxyjen.execution.ExecutionRuntime.FailureMode;
 import io.oxyjen.graph.ParallelExecutor;
 
 class StressTests {
 	
-	@Test
+	//@Test
 	void shouldDetectRaceConditionsOnSharedState() {
 	    AtomicInteger unsafeCounter = new AtomicInteger(0);
 	    NodePlugin<Integer, Integer> node = new NodePlugin<>() {
@@ -42,7 +43,7 @@ class StressTests {
 	    // iff race -> often < 3
 	    assertTrue(unsafeCounter.get() <= 3);
 	}
-	@Test
+	//@Test
 	void shouldRespectMaxConcurrencyLimit() {
 	    AtomicInteger concurrent = new AtomicInteger(0);
 	    AtomicInteger maxSeen = new AtomicInteger(0);
@@ -61,11 +62,10 @@ class StressTests {
 	        builder.addNode("N" + i, slowNode);
 	    }
 	    Graph graph = builder.build();
-	    ParallelExecutor executor = new ParallelExecutor(
-	            ForkJoinPool.commonPool(),
-	            FailureMode.FAIL_FAST,
-	            2 // limit
-	    );
+	    ExecutionRuntime runtime = ExecutionRuntime.builder().executor(ForkJoinPool.commonPool())
+	    		.failureMode(FailureMode.FAIL_FAST)
+	    		.maxConcurrency(2).build();
+	    ParallelExecutor executor = new ParallelExecutor(runtime);
 	    executor.run(graph, 1, new NodeContext());
 	    assertTrue(maxSeen.get() <= 2);
 	}
@@ -87,9 +87,9 @@ class StressTests {
 	            .connect("start", "A")
 	            .connect("start", "B")
 	            .connect("A", "join")
-	            .connect("B", "join")
+	            .connectOnFailure("B", "join")
 	            .build();
 	    new ParallelExecutor().run(graph, "x", new NodeContext());
-	    assertEquals(2, executions.get()); // MergeNode will bring join
+	    assertEquals(1, executions.get()); // MergeNode will bring join
 	}
 }

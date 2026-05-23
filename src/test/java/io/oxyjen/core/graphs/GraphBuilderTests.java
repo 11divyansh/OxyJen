@@ -15,7 +15,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.GraphBuilder;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
-import io.oxyjen.graph.FailureMode;
+import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.ParallelExecutor;
 
 class GraphBuilderTests {
@@ -166,10 +166,8 @@ class GraphBuilderTests {
 	            .connect("A", "C")
 	            .build();
 
-	    ParallelExecutor executor = new ParallelExecutor(
-	            ForkJoinPool.commonPool(),
-	            FailureMode.CONTINUE_ON_ERROR
-	    );
+	    ExecutionRuntime runtime = ExecutionRuntime.builder().executor(ForkJoinPool.commonPool()).failureMode(io.oxyjen.execution.ExecutionRuntime.FailureMode.SKIP_FAILED).build();
+	    ParallelExecutor executor = new ParallelExecutor(runtime);
 	    Map<String, Object> result = executor.run(graph, "data", new NodeContext());
 	    assertTrue(result.values().contains("data-C"));
 	}

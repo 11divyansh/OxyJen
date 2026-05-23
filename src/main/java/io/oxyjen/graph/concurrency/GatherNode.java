@@ -4,9 +4,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 
 public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
+
+    @Override
+    public GatherResult process(Object input, NodeContext context) {
+        List<Object> items;
+        if (input instanceof List<?> list) {
+            items = new ArrayList<>(list);
+        } else if (input == null) {
+            items = List.of();
+        } else {
+            items = List.of(input);
+        }
+        return new GatherResult(items, items, items.size());
+    }
 
 	public static final class GatherResult {
 

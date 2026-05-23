@@ -64,7 +64,7 @@ class BranchRouterMergeTest {
 	        }
 	    }
 
-	    //@Test
+	    @Test
 	    void branch_router_merge_collect_all() {
 	        MergeNode merge = new MergeNode.Builder()
 	            .expect("A", "B")
@@ -107,7 +107,7 @@ class BranchRouterMergeTest {
 	        assertEquals("test_B", merged.get("B"));
 	    }
 
-	    //@Test
+	    @Test
 	    void branch_router_merge_first_wins() {
 	        MergeNode merge = new MergeNode.Builder()
 	            .expect("A", "B")
@@ -144,7 +144,7 @@ class BranchRouterMergeTest {
 	        assertEquals("input_A", mergeResult.getMerged());
 	    }
 
-	    //@Test
+	    @Test
 	    void branch_router_merge_list_strategy() {
 	        MergeNode merge = new MergeNode.Builder()
 	            .expect("A", "B")
@@ -182,7 +182,7 @@ class BranchRouterMergeTest {
 	        assertTrue(merged.contains("test_A"));
 	        assertTrue(merged.contains("test_B"));
 	    }
-	    //@Test
+	    @Test
 	    void branch_else_path_skips_router_and_merge() {
 	        Graph graph = GraphBuilder.named("else-path")
 	            .addNode("branch",
@@ -211,7 +211,7 @@ class BranchRouterMergeTest {
 	        );
 	        assertNull(result.get("A"));
 	    }
-	    //@Test
+	    @Test
 	    void branch_router_merge_timeout() {
 	        MergeNode merge = new MergeNode.Builder()
 	            .expect("A", "B")
@@ -242,7 +242,7 @@ class BranchRouterMergeTest {
 	            () -> executor.run(graph, "test", new NodeContext())
 	        );
 	    }
-	   // @Test
+	    @Test
 	    void branch_router_metrics_increment() {
 	        Graph graph = GraphBuilder.named("metrics")
 	            .addNode("branch",

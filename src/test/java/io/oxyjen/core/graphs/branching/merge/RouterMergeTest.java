@@ -22,7 +22,7 @@ import io.oxyjen.graph.branching.RouterNode;
 
 class RouterMergeTest {
 
-	//@Test
+	@Test
 	void router_merge_success_all() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
@@ -57,7 +57,7 @@ class RouterMergeTest {
 	        throw new RuntimeException("boom");
 	    }
 	}
-	//@Test
+	@Test
 	void router_merge_partial_failure_collect() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
@@ -102,7 +102,7 @@ class RouterMergeTest {
 	        return input + "_" + name;
 	    }
 	}
-	//@Test
+	@Test
 	void router_merge_first_wins() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
@@ -131,7 +131,7 @@ class RouterMergeTest {
 	    System.out.println(result.get("merge"));
 	    assertNotNull(mergeResult);
 	}
-	//@Test
+	@Test
 	void router_merge_all_fail() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
@@ -164,7 +164,7 @@ class RouterMergeTest {
 	    assertTrue(mergeResult.hasErrors());
 	    assertEquals(2, mergeResult.getErrors().size());
 	}
-	//@Test
+	@Test
 	void merge_unexpected_contributor_ignored() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A") // only expects A
@@ -193,7 +193,7 @@ class RouterMergeTest {
 	    assertEquals("test_A", mergeResult.get("A"));
 	    assertFalse(mergeResult.getSuccess().containsKey("B"));
 	}
-	//@Test
+	@Test
 	void router_merge_timeout() {
 	    MergeNode merge = new MergeNode.Builder()
 	        .expect("A", "B")
