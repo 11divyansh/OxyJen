@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
@@ -24,15 +25,23 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
                     + " items from " + normalized.sourceCount + " source(s)"
                     + " using mode=" + collectionMode
         );
-        List<Object> items;
+    	List<Object> filtered = applyFilter(normalized.items);
+        List<Object> sorted = applySort(filtered);
+        List<Object> limited = applyLimit(sorted);
+        List<Object> transformed = applyTransform(limited);
+        List<Object> finalItems;
         if (input instanceof List<?> list) {
-            items = new ArrayList<>(list);
-        } else if (input == null) {
-            items = List.of();
+            finalItems = new ArrayList<>(list);
         } else {
-            items = List.of(input);
+        	finalItems = transformed;
         }
-        return new GatherResult(items, items, items.size());
+        long elapsed = System.currentTimeMillis() - start;
+        context.getLogger().info(
+            "[GatherNode:" + name + "] After filter/sort/limit: " + finalItems.size()
+                + " items. Dropped: " + (normalized.items.size() - finalItems.size())
+                + ", processingTimeMs=" + elapsed
+        );
+        return new GatherResult(finalItems, finalItems, normalized.items.size(), elapsed, normalized.sourceCount);
     }
 
 	public static final class GatherResult {
@@ -168,4 +177,32 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
     	
     /** Internal carrier - avoids polluting GatherResult with normalize-only fields. */
     private record NormalizeResult(List<Object> items, int sourceCount) {}
+    
+    /** Returns a new filtered list. Never mutates input. */
+    private List<Object> applyFilter(List<Object> input) {
+        if (filter == null) return new ArrayList<>(input);
+        return input.stream()
+            .filter(filter)
+            .collect(Collectors.toCollection(ArrayList::new));
+    }
+ 
+    /** Returns a new sorted list. Never mutates input. */
+    private List<Object> applySort(List<Object> input) {
+        if (sorter == null) return new ArrayList<>(input);
+        List<Object> copy = new ArrayList<>(input);
+        copy.sort(sorter);
+        return copy;
+    }
+    /** Returns a snapshot subList. Never mutates input. */
+    private List<Object> applyLimit(List<Object> input) {
+        if (limit <= 0 || input.size() <= limit) return new ArrayList<>(input);
+        return new ArrayList<>(input.subList(0, limit));
+    }
+ 
+    /** Maps each element through the transformer. Never mutates input. */
+    private List<Object> applyTransform(List<Object> input) {
+        return input.stream()
+            .map(transformer)
+            .collect(Collectors.toCollection(ArrayList::new));
+    }
 }
