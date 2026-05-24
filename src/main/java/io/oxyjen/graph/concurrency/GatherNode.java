@@ -3,7 +3,9 @@ package io.oxyjen.graph.concurrency;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -30,10 +32,14 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
         List<Object> limited = applyLimit(sorted);
         List<Object> transformed = applyTransform(limited);
         List<Object> finalItems;
-        if (input instanceof List<?> list) {
-            finalItems = new ArrayList<>(list);
+        Object aggregated;
+        if (groupByFn != null) {
+        	Map<Object, List<Object>> grouped = applyGroupBy(transformed);
+        	aggregated = grouped;
+            finalItems = transformed;
         } else {
         	finalItems = transformed;
+        	aggregated = aggregate(Collections.unmodifiableList(finalItems));
         }
         long elapsed = System.currentTimeMillis() - start;
         context.getLogger().info(
@@ -41,7 +47,11 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
                 + " items. Dropped: " + (normalized.items.size() - finalItems.size())
                 + ", processingTimeMs=" + elapsed
         );
-        return new GatherResult(finalItems, finalItems, normalized.items.size(), elapsed, normalized.sourceCount);
+        GatherResult result = new GatherResult(finalItems, aggregated, normalized.items.size(), elapsed, normalized.sourceCount);
+        // Store result in typed memory namespace - avoids string-key collision
+        // and hidden global state mutation on context.data
+        context.memory("gather").put(name, result);
+        return result;
     }
 
 	public static final class GatherResult {
@@ -205,4 +215,23 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
             .map(transformer)
             .collect(Collectors.toCollection(ArrayList::new));
     }
+    /**
+     * Groups items by the key extractor. Returns a LinkedHashMap to preserve
+     * insertion order of first-seen keys.
+     */
+    private Map<Object, List<Object>> applyGroupBy(List<Object> input) {
+        Map<Object, List<Object>> grouped = new LinkedHashMap<>();
+        for (Object item : input) {
+            Object key = groupByFn.apply(item);
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
+        }
+        return Collections.unmodifiableMap(grouped);
+    }
+ 
+    private Object aggregate(List<Object> items) {
+        return aggregateFn.apply(items);
+    }
+ 
+    @Override
+    public String getName() { return name; }
 }
