@@ -50,7 +50,7 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
         GatherResult result = new GatherResult(finalItems, aggregated, normalized.items.size(), elapsed, normalized.sourceCount);
         // Store result in typed memory namespace - avoids string-key collision
         // and hidden global state mutation on context.data
-        context.memory("gather").put(name, result);
+        //context.memory("gather").put(name, result);
         return result;
     }
 
@@ -105,7 +105,6 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
 	// Aggregation enum
 	public enum Aggregation {
         LIST,
-        MAP,
         FIRST,
         LAST,
         COUNT,
@@ -234,4 +233,121 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
  
     @Override
     public String getName() { return name; }
+    
+    public static Builder builder() { return new Builder(); }
+    
+    public static final class Builder {
+        private CollectionMode collectionMode    = CollectionMode.SUCCESS_ONLY;
+        private Predicate<?> filter              = null;
+        private Comparator<?> sorter             = null;
+        private int limit                        = 0;
+        private Function<?, ?> transformer       = null;
+        private Function<List<Object>, Object> aggregateFn = null;
+        private Function<?, ?> groupByFn         = null;
+        private Aggregation aggregationStrategy = Aggregation.LIST;
+ 
+        /**
+         * Controls which TaskResults are included when gathering from a
+         * ParallelResult or MapResult.
+         *
+         * Defaults to SUCCESS_ONLY. Must be called explicitly if partial
+         * failure results are needed downstream.
+         */
+        public Builder collectMode(CollectionMode mode) {
+            this.collectionMode = Objects.requireNonNull(mode);
+            return this;
+        }
+ 
+        public <T> Builder filter(Predicate<T> predicate) {
+            this.filter = Objects.requireNonNull(predicate);
+            return this;
+        }
+ 
+        public <T> Builder sortBy(Comparator<T> comparator) {
+            this.sorter = Objects.requireNonNull(comparator);
+            return this;
+        }
+ 
+        public Builder limit(int n) {
+            if (n < 1) throw new IllegalArgumentException("limit must be >= 1");
+            this.limit = n;
+            return this;
+        }
+ 
+        public <I, O> Builder transform(Function<I, O> fn) {
+            this.transformer = Objects.requireNonNull(fn);
+            return this;
+        }
+ 
+        /**
+         * Groups the transformed items by the given key extractor.
+         * When groupBy is set, the aggregated value in GatherResult will be a
+         * {@code Map<K, List<V>>} regardless of the aggregation strategy.
+         */
+        public <T, K> Builder groupBy(Function<T, K> keyExtractor) {
+            this.groupByFn = Objects.requireNonNull(keyExtractor);
+            return this;
+        }
+ 
+        /**
+         * Built-in aggregation strategies. For numeric reducers (SUM, AVERAGE,
+         * MAX, MIN) elements are cast to {@link Number}; a ClassCastException
+         * will be thrown at runtime for non-numeric types.
+         */
+        public Builder aggregate(Aggregation strategy) {
+        	this.aggregationStrategy = Objects.requireNonNull(strategy);
+            this.aggregateFn = switch (strategy) {
+                case LIST  -> items -> new ArrayList<>(items);
+                case FIRST -> items -> items.isEmpty() ? null : items.get(0);
+                case LAST  -> items -> items.isEmpty() ? null : items.get(items.size() - 1);
+                case COUNT -> items -> items.size();
+ 
+                case SUM -> items -> items.stream()
+                    .map(o -> (Number) o)
+                    .mapToDouble(Number::doubleValue)
+                    .sum();
+ 
+                case AVERAGE -> items -> items.isEmpty() ? 0.0 : items.stream()
+                    .map(o -> (Number) o)
+                    .mapToDouble(Number::doubleValue)
+                    .average()
+                    .orElse(0.0);
+ 
+                case MAX -> items -> items.stream()
+                    .map(o -> (Number) o)
+                    .mapToDouble(Number::doubleValue)
+                    .max()
+                    .orElse(Double.NaN);
+ 
+                case MIN -> items -> items.stream()
+                    .map(o -> (Number) o)
+                    .mapToDouble(Number::doubleValue)
+                    .min()
+                    .orElse(Double.NaN);
+            };
+            return this;
+        }
+ 
+        /** Fully custom aggregation over the final item list. */
+        public Builder aggregateWith(Function<List<Object>, Object> fn) {
+            this.aggregateFn = Objects.requireNonNull(fn);
+            this.aggregationStrategy = null;
+            return this;
+        }
+ 
+        public GatherNode build(String nodeName) {
+            Objects.requireNonNull(nodeName, "nodeName must not be null");
+            if (aggregateFn == null) {
+                aggregateFn = items -> new ArrayList<>(items); // default: LIST
+            }
+            if (groupByFn != null && aggregationStrategy != null && aggregationStrategy != Aggregation.LIST) {
+                throw new IllegalStateException(
+                    "groupBy currently supports only LIST aggregation"
+                );
+            }
+            return new GatherNode(nodeName, collectionMode, filter, sorter,
+            		limit, transformer, aggregateFn, groupByFn
+            );
+        }
+    }
 }

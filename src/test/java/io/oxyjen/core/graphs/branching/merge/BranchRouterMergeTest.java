@@ -299,7 +299,7 @@ class BranchRouterMergeTest {
 	            .connect("router", "A")
 	            .connect("router", "B")
 	            .connect("A", "merge")
-	            .connect("B", "merge")
+	            .connectOnFailure("B", "merge")
 	            .build();
 	        Map<String, Object> result = executor.run(graph, "test", new NodeContext());
 	        MergeResult mergeResult = (MergeResult) result.get("merge");

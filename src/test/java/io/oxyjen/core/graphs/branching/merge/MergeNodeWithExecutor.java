@@ -56,7 +56,7 @@ class FailingNode implements NodePlugin<Object, Object> {
 }
 
 class MergeNodeWithExecutor {
-	//@Test
+	@Test
 	void shouldMergeAllSuccessfulNodes() {
 	    NodeContext context = new NodeContext();
 	    MergeNode merge = new MergeNode.Builder()
@@ -76,7 +76,7 @@ class MergeNodeWithExecutor {
 	    assertEquals(2, mergeResult.getSuccess().size());
 	    assertTrue(mergeResult.getErrors().isEmpty());
 	}
-	//@Test
+	@Test
 	void shouldCollectErrorsFromFailingNodes() {
 	    NodeContext context = new NodeContext();
 
@@ -115,7 +115,7 @@ class MergeNodeWithExecutor {
 	            .addNode("B", new FailingNode("B"))
 	            .addNode("merge", merge)
 	            .connect("A", "merge")
-	            .connect("B", "merge") // failure won't propagate
+	            .connectOnFailure("B", "merge") // failure won't propagate
 	            .build();
 	    ParallelExecutor executor = new ParallelExecutor(
 	            ExecutionRuntime.builder()
@@ -127,7 +127,7 @@ class MergeNodeWithExecutor {
 	    NodeFailure failure = (NodeFailure) result.get("merge");
 	    assertTrue(failure.error() instanceof MergeNode.MergeTimeoutException);
 	}
-	//@Test
+	@Test
 	void shouldRouteFailureToMergeNode() {
 	    NodeContext context = new NodeContext();
 	    MergeNode merge = new MergeNode.Builder()
@@ -151,7 +151,7 @@ class MergeNodeWithExecutor {
 	    assertEquals(1, mergeResult.getSuccess().size());
 	    assertEquals(1, mergeResult.getErrors().size());
 	}
-	//@Test
+	@Test
 	void shouldHandleMultipleParallelBranches() {
 	    NodeContext context = new NodeContext();
 	    MergeNode merge = new MergeNode.Builder()
@@ -172,7 +172,7 @@ class MergeNodeWithExecutor {
 	            (MergeNode.MergeResult) result.get("merge");
 	    assertEquals(3, mergeResult.getSuccess().size());
 	}
-	//@Test
+	@Test
 	void downstreamNodeShouldConsumeMergeResult() {
 	    NodeContext context = new NodeContext();
 	    MergeNode merge = new MergeNode.Builder()
