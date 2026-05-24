@@ -2,15 +2,28 @@ package io.oxyjen.graph.concurrency;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.gather.CollectionMode;
+import io.oxyjen.execution.gather.GatherCollectors;
 
 public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
 
     @Override
     public GatherResult process(Object input, NodeContext context) {
+    	long start = System.currentTimeMillis();
+    	NormalizeResult normalized = normalize(input, context);
+    	context.getLogger().info(
+    			"[GatherNode:" + name + "] Collected " + normalized.items.size()
+                    + " items from " + normalized.sourceCount + " source(s)"
+                    + " using mode=" + collectionMode
+        );
         List<Object> items;
         if (input instanceof List<?> list) {
             items = new ArrayList<>(list);
@@ -28,50 +41,131 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
         private final Object aggregated;
         private final int totalCollected; // before filter/limit
         private final int filteredOut;
+        private final long processingTimeMs;
+        private final int sourceCount;
 
-        GatherResult(List<Object> items, Object aggregated, int totalCollected) {
+        GatherResult(List<Object> items, Object aggregated, int totalCollected, long processingTimeMs, int sourceCount) {
             this.items = Collections.unmodifiableList(new ArrayList<>(items));
             this.aggregated = aggregated;
             this.totalCollected = totalCollected;
             this.filteredOut = totalCollected - items.size();
+            this.processingTimeMs = processingTimeMs;
+            this.sourceCount = sourceCount;
         }
 
         /** The aggregated value (result of the aggregation strategy or custom fn). */
         @SuppressWarnings("unchecked")
-        public <T> T value() {
-            return (T) aggregated;
-        }
+        public <T> T value() { return (T) aggregated; }
 
         /** All items after filter/sort/limit, before aggregation. */
         @SuppressWarnings("unchecked")
-        public <T> List<T> items() {
-            return (List<T>) items;
-        }
+        public <T> List<T> items() { return (List<T>) items; }
 
         /** How many items were collected from upstream before filtering. */
-        public int totalCollected() {
-            return totalCollected;
-        }
+        public int totalCollected() { return totalCollected; }
 
         /** How many items were removed by the filter. */
-        public int filteredOut() {
-            return filteredOut;
-        }
+        public int filteredOut() { return filteredOut; }
 
         /** How many items made it through to aggregation. */
-        public int count() {
-            return items.size();
-        }
+        public int count() { return items.size(); }
 
-        public boolean isEmpty() {
-            return items.isEmpty();
-        }
+        public boolean isEmpty() { return items.isEmpty(); }
+        public long processingTimeMs() { return processingTimeMs; }
+        public int sourceCount()       { return sourceCount; }
 
         @Override
         public String toString() {
             return "GatherResult{collected=" + totalCollected
                 + ", filtered=" + filteredOut
-                + ", kept=" + items.size() + "}";
+                + ", kept=" + items.size() 
+                + ", processingTimeMs=" + processingTimeMs
+                + ", sources=" + sourceCount + "}";
         }
     }
+	// Aggregation enum
+	public enum Aggregation {
+        LIST,
+        MAP,
+        FIRST,
+        LAST,
+        COUNT,
+        SUM,
+        AVERAGE,
+        MAX,
+        MIN
+    }
+	
+	private final String name;
+    private final CollectionMode collectionMode;
+    private final Predicate<Object> filter;
+    private final Comparator<Object> sorter;
+    private final int limit;
+    private final Function<Object, Object> transformer;
+    private final Function<List<Object>, Object> aggregateFn;
+ 
+    // optional groupBy key extractor - null means no grouping
+    private final Function<Object, Object> groupByFn;
+ 
+    @SuppressWarnings("unchecked")
+    private GatherNode(
+            String name,
+            CollectionMode collectionMode,
+            Predicate<?> filter,
+            Comparator<?> sorter,
+            int limit,
+            Function<?, ?> transformer,
+            Function<List<Object>, Object> aggregateFn,
+            Function<?, ?> groupByFn
+    ) {
+        this.name           = Objects.requireNonNull(name, "name must not be null");
+        this.collectionMode = Objects.requireNonNull(collectionMode, "collectionMode must not be null");
+        this.filter         = filter      != null ? (Predicate<Object>) filter      : x -> true;
+        this.sorter         = (Comparator<Object>) sorter;
+        this.limit          = limit;
+        this.transformer    = transformer != null ? (Function<Object, Object>) transformer : Function.identity();
+        this.aggregateFn    = Objects.requireNonNull(aggregateFn, "aggregateFn must not be null");
+        this.groupByFn      = (Function<Object, Object>) groupByFn;
+    }
+    
+    /**
+     * Extracts raw items from whatever input type arrives, using CollectionMode
+     * and GatherCollectors so semantics are always explicit.
+     *
+     * Supported upstream types:
+     *   - ParallelNode.ParallelResult
+     *   - MapNode.MapResult
+     *   - Iterable
+     *   - single value (wrapped)
+     *
+     * CollectionMode controls which TaskResults are included for
+     * ParallelResult and MapResult inputs.
+     */
+    @SuppressWarnings("unchecked")
+    private NormalizeResult normalize(Object input, NodeContext context) {
+        if (input instanceof ParallelNode.ParallelResult<?> parallel) {
+            List<?> collected = GatherCollectors.collectFromParallelResult(parallel, collectionMode);
+            return new NormalizeResult(new ArrayList<>(collected), 1);
+        }
+ 
+        if (input instanceof MapNode.MapResult<?> mapResult) {
+            List<?> collected = GatherCollectors.collectFromMapResult(mapResult, collectionMode);
+            return new NormalizeResult(new ArrayList<>(collected), 1);
+        }
+ 
+        if (input instanceof Iterable<?> iterable) {
+            List<?> collected = GatherCollectors.collectFromIterable(iterable);
+            return new NormalizeResult(new ArrayList<>(collected), 1);
+        }
+ 
+        // Single value, wrap in list
+        if (input != null) {
+            return new NormalizeResult(new ArrayList<>(List.of(input)), 1);
+        }
+ 
+        return new NormalizeResult(Collections.emptyList(), 0);
+    }
+    	
+    /** Internal carrier - avoids polluting GatherResult with normalize-only fields. */
+    private record NormalizeResult(List<Object> items, int sourceCount) {}
 }
