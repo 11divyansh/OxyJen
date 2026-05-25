@@ -115,7 +115,7 @@ class MergeNodeWithExecutor {
 	            .addNode("B", new FailingNode("B"))
 	            .addNode("merge", merge)
 	            .connect("A", "merge")
-	            .connectOnFailure("B", "merge") // failure won't propagate
+	            .connect("B", "merge") // failure won't propagate
 	            .build();
 	    ParallelExecutor executor = new ParallelExecutor(
 	            ExecutionRuntime.builder()
@@ -123,7 +123,6 @@ class MergeNodeWithExecutor {
 	                    .build()
 	    );
 	    Map<String, Object> result = executor.run(graph, null, context);
-
 	    NodeFailure failure = (NodeFailure) result.get("merge");
 	    assertTrue(failure.error() instanceof MergeNode.MergeTimeoutException);
 	}

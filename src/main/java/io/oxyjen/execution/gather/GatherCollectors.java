@@ -37,9 +37,7 @@ public final class GatherCollectors {
             case COMPLETED_ONLY -> result.allResults()
                     .values()
                     .stream()
-                    .filter(r ->
-                            r.isSuccess() || r.isFailure()
-                    )
+                    .filter(TaskResult::isCompleted)
                     .toList();
         };
     }
@@ -64,7 +62,7 @@ public final class GatherCollectors {
 
          case COMPLETED_ONLY -> result.toResultList()
                  .stream()
-                 .filter(r -> r.isSuccess() || r.isFailure())
+                 .filter(TaskResult::isCompleted)
                  .toList();
      };
     }
