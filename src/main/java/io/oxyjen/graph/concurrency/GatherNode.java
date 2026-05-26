@@ -224,6 +224,7 @@ public class GatherNode implements NodePlugin<Object, GatherNode.GatherResult> {
             Object key = groupByFn.apply(item);
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
         }
+        grouped.replaceAll((k, v) -> Collections.unmodifiableList(v));
         return Collections.unmodifiableMap(grouped);
     }
  
