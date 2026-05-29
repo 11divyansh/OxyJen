@@ -62,14 +62,11 @@ class GatherNodeFullPipelineTest {
         Map<String, TaskResult<String>> results = new LinkedHashMap<>();
         results.put("a", new Success<>("apple"));
         results.put("b", new Success<>("banana"));
-        results.put("c", new Failure<>(
-            new RuntimeException("boom")
-        ));
+        results.put("c", new Failure<>(new RuntimeException("boom")));
         results.put("d", new Cancelled<>("cancelled"));
         ParallelNode.ParallelResult<String> parallel = ParallelNode.ParallelResult.of(
                 results,
-                List.of("a", "b", "c", "d")
-            );
+                List.of("a", "b", "c", "d"));
         GatherNode node = GatherNode.builder()
             .collectMode(CollectionMode.SUCCESS_ONLY)
             .transform((String s) -> s.length())
@@ -77,9 +74,6 @@ class GatherNodeFullPipelineTest {
             .build("gather");
         NodeContext ctx = new NodeContext();
         GatherNode.GatherResult result = node.process(parallel, ctx);
-        assertEquals(
-            11.0,
-            ((Number) result.value()).doubleValue()
-        );
+        assertEquals(11.0,((Number) result.value()).doubleValue());
     }
 }
