@@ -152,6 +152,48 @@ class MergeNodeWithExecutor {
 	    assertEquals(1, mergeResult.getErrors().size());
 	}
 	@Test
+	void shouldRouteAnyNodeFailureToMergeNode() {
+	    NodeContext context = new NodeContext();
+	    MergeNode merge = new MergeNode.Builder()
+	            .expect("A", "B")
+	            .build("merge");
+	    Graph graph = GraphBuilder.named("test")
+	            .addNode("A", new SuccessNode("A", "ok"))
+	            .addNode("B", new FailingNode("B"))
+	            .addNode("merge", merge)
+	            .connect("A", "merge")
+	            .connect("B", "merge")
+	            .connectAnyFailureTo("merge")
+	            .build();
+	    ParallelExecutor executor = new ParallelExecutor(
+	            ExecutionRuntime.builder()
+	                    .failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS)
+	                    .build()
+	    );
+	    Map<String, Object> result = executor.run(graph, null, context);
+	    MergeNode.MergeResult mergeResult =
+	            (MergeNode.MergeResult) result.get("merge");
+	    assertEquals(1, mergeResult.getSuccess().size());
+	    assertEquals(1, mergeResult.getErrors().size());
+	    assertTrue(mergeResult.getErrors().containsKey("B"));
+	}
+	@Test
+	void anyFailureRouteShouldNotHideSuccessfulTerminalOutput() {
+	    NodeContext context = new NodeContext();
+	    Graph graph = GraphBuilder.named("test")
+	            .addNode("A", new SuccessNode("A", "ok"))
+	            .addNode("failureSink", new SuccessNode("failureSink", "handled"))
+	            .connectAnyFailureTo("failureSink")
+	            .build();
+	    ParallelExecutor executor = new ParallelExecutor(
+	            ExecutionRuntime.builder()
+	                    .failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS)
+	                    .build()
+	    );
+	    Map<String, Object> result = executor.run(graph, null, context);
+	    assertEquals("ok", result.get("A"));
+	}
+	@Test
 	void shouldHandleMultipleParallelBranches() {
 	    NodeContext context = new NodeContext();
 	    MergeNode merge = new MergeNode.Builder()

@@ -23,6 +23,7 @@ public class GraphBuilder {
     private boolean allowCycles = false;
     Map<String, NodePlugin<?, ?>> nodes = new LinkedHashMap<>();
     private final List<Edge> edges = new ArrayList<>();
+    private final List<String> anyFailureTargets = new ArrayList<>();
 
     public static GraphBuilder named(String name) {
         GraphBuilder builder = new GraphBuilder();
@@ -112,6 +113,23 @@ public class GraphBuilder {
         edges.add(new FailureEdge(source, target));
         return this;
     }
+    /**
+     * Routes any node failure in this graph to the given target node.
+     *
+     * This expands to one FailureEdge per registered source node at build time,
+     * excluding the target itself and preserving any explicit failure edges that
+     * were already added with connectOnFailure(from, to).
+     */
+    public GraphBuilder connectAnyFailureTo(String to) {
+        Objects.requireNonNull(to, "Failure target cannot be null");
+        anyFailureTargets.add(to);
+        return this;
+    }
+    
+    /** Alias for connectAnyFailureTo(String). */
+    public GraphBuilder connectOnAnyFailure(String to) {
+        return connectAnyFailureTo(to);
+    }
     
     /** To explicitly allow cycles, and restrain user from creating infinite loop*/
     public GraphBuilder allowCycles() {
@@ -124,7 +142,9 @@ public class GraphBuilder {
         for (NodePlugin<?, ?> node : nodes.values()) {
             graph.addNode(node);
         }
-        for (Edge edge : edges) {
+        List<Edge> edgesToBuild = new ArrayList<>(edges);
+        addAnyFailureEdges(edgesToBuild);
+        for (Edge edge : edgesToBuild) {
         	graph.addEdge(edge);
         }
         long uniqueNames = nodes.values().stream()
@@ -136,6 +156,33 @@ public class GraphBuilder {
         }
         graph.validate();
         return graph;
+    }
+    private void addAnyFailureEdges(List<Edge> edgesToBuild) {
+        for (String targetName : anyFailureTargets) {
+            NodePlugin<?, ?> target = getNode(targetName);
+            for (NodePlugin<?, ?> source : nodes.values()) {
+                if (source == target) {
+                    continue;
+                }
+                if (!hasFailureEdge(edgesToBuild, source, target)) {
+                    edgesToBuild.add(new FailureEdge(source, target));
+                }
+            }
+        }
+    }
+    private boolean hasFailureEdge(
+            List<Edge> edgesToBuild,
+            NodePlugin<?, ?> source,
+            NodePlugin<?, ?> target
+    ) {
+        for (Edge edge : edgesToBuild) {
+            if (edge instanceof FailureEdge
+                    && edge.getSource() == source
+                    && edge.getTarget() == target) {
+                return true;
+            }
+        }
+        return false;
     }
     private NodePlugin<?, ?> getNode(String name){
     	NodePlugin<?, ?> node = nodes.get(name);

@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
+import io.oxyjen.graph.edges.FailureEdge;
 
 /**
   * A directed acyclic graph (DAG) of {@link NodePlugin} nodes connected by {@link Edge}s.
@@ -148,7 +149,10 @@ public class Graph {
     public Set<NodePlugin<?, ?>> getTerminalNodes() {
         Set<NodePlugin<?, ?>> terminals = new LinkedHashSet<>();
         for (NodePlugin<?, ?> node : nodes) {
-            if (adjacency.getOrDefault(node, Collections.emptyList()).isEmpty()) {
+            boolean hasSuccessOutgoing = adjacency.getOrDefault(node, Collections.emptyList())
+                    .stream()
+                    .anyMatch(edge -> !(edge instanceof FailureEdge));
+            if (!hasSuccessOutgoing) {
                 terminals.add(node);
             }
         }
