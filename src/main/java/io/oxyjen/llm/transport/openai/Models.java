@@ -18,6 +18,7 @@ public final class Models {
     
     public static final String GPT_4O = "gpt-4o";
     public static final String GPT_4O_MINI = "gpt-4o-mini";
+    public static final String GPT_41_NANO = "gpt-4.1-nano";
     public static final String GPT_4_TURBO = "gpt-4-turbo";
     public static final String GPT_4 = "gpt-4";
     public static final String GPT_35_TURBO = "gpt-3.5-turbo";
@@ -35,6 +36,12 @@ public final class Models {
         MODELS.put(GPT_4O_MINI, new ModelInfo(
             GPT_4O_MINI,
             128_000
+        ));
+
+        // GPT-4.1 nano
+        MODELS.put(GPT_41_NANO, new ModelInfo(
+            GPT_41_NANO,
+            1_047_576
         ));
         
         // GPT-4-turbo

@@ -16,6 +16,7 @@ import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.graph.edges.CyclicEdge;
+import io.oxyjen.graph.edges.FailureEdge;
 
 /**
  * Validates the structural integrity of a {@link Graph} before execution.
@@ -64,13 +65,13 @@ public final class DAGValidator {
   
     // Cycle detection (DFS on non-cyclic edges only)
     private static void detectIllegalCycles(Graph graph, List<String> errors) {
-        // Build adjacency using only DirectEdge and ConditionalEdge (CyclicEdge excluded)
+        // Build adjacency using only normal success-path edges.
         Map<NodePlugin<?, ?>, List<NodePlugin<?, ?>>> strictAdj = new LinkedHashMap<>();
         for (NodePlugin<?, ?> node : graph.getNodes()) {
             strictAdj.put(node, new ArrayList<>());
         }
         for (Edge edge : graph.getAllEdges()) {
-            if (!(edge instanceof CyclicEdge)) {
+            if (!(edge instanceof CyclicEdge) && !(edge instanceof FailureEdge)) {
                 strictAdj.get(edge.getSource()).add(edge.getTarget());
             }
         }
