@@ -1,6 +1,7 @@
 package io.oxyjen.core.graphs.branching.merge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
@@ -14,7 +15,6 @@ import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.ParallelExecutor;
-import io.oxyjen.graph.ParallelExecutor.NodeFailure;
 import io.oxyjen.graph.branching.MergeNode;
 
 class SuccessNode implements NodePlugin<Object, Object> {
@@ -122,9 +122,10 @@ class MergeNodeWithExecutor {
 	                    .failureMode(ExecutionRuntime.FailureMode.COLLECT_ERRORS)
 	                    .build()
 	    );
-	    Map<String, Object> result = executor.run(graph, null, context);
-	    NodeFailure failure = (NodeFailure) result.get("merge");
-	    assertTrue(failure.error() instanceof MergeNode.MergeTimeoutException);
+	    assertThrows(
+	            MergeNode.MergeTimeoutException.class,
+	            () -> executor.run(graph, null, context)
+	    );
 	}
 	@Test
 	void shouldRouteFailureToMergeNode() {

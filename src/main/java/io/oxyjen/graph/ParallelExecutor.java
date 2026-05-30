@@ -205,7 +205,7 @@ public class ParallelExecutor {
                     }
 
                     case COLLECT_ERRORS -> {
-                    	if (node instanceof MergeNode && e instanceof MergeNode.MergeTimeoutException) {
+                    	if (node.unwrap() instanceof MergeNode && e instanceof MergeNode.MergeTimeoutException) {
                             throw new CompletionException(e);
                         }
                         // continue graph but preserve error
@@ -289,7 +289,7 @@ public class ParallelExecutor {
                     merge.contribute(node.getName(), output, context);
                     if (scheduled.add(merge.getName())) {
                         downstream.add(
-                            executeNodeAsync(merge, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                            executeNodeAsync(target, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
                         );
                     }
                     continue;
