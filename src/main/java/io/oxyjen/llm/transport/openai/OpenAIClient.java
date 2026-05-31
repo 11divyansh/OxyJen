@@ -78,6 +78,8 @@ public final class OpenAIClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Request interrupted", e);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("OpenAI request failed", e);
         }

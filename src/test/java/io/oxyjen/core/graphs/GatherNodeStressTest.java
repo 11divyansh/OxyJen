@@ -78,4 +78,31 @@ class GatherNodeStressTest {
 	    assertEquals(Objects.toString(first.value()),Objects.toString(second.value()));
 	    assertEquals(Objects.toString(second.value()), Objects.toString(third.value()));
 	}
+	
+	@Test
+	void parallel_node_should_preserve_all_successes_under_contention() {
+
+	    Builder<Integer, Integer> parallel = ParallelNode.<Integer, Integer>builder();
+	    int taskCount = 100;
+	    for (int i = 0; i < taskCount; i++) {
+	        int value = i;
+	        parallel.task(
+	            "task-" + i,
+	            input -> {
+	                try {
+						Thread.sleep(1);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+	                return value;
+	            }
+	        );
+	    }
+	    ParallelNode<Integer, Integer> node = parallel.build("parallel");
+	    NodeContext ctx = new NodeContext();
+	    ctx.setRuntime(ExecutionRuntime.defaultRuntime());
+	    ParallelNode.ParallelResult<Integer> result =node.process(0, ctx);
+	    assertEquals(taskCount, result.successCount());
+	    assertEquals(taskCount, result.allOutputs().size());
+	}
 }

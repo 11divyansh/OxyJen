@@ -132,8 +132,9 @@ public class Graph {
         Set<NodePlugin<?, ?>> hasIncoming = new HashSet<>();
         for (List<Edge> edges : adjacency.values()) {
             for (Edge e : edges) {
-                // CyclicEdges don't count as real incoming for root detection
-                if (!(e instanceof CyclicEdge)) {
+                // CyclicEdges and FailureEdges don't count as normal incoming
+                // edges for root detection.
+                if (!(e instanceof CyclicEdge) && !(e instanceof FailureEdge)) {
                     hasIncoming.add(e.getTarget());
                 }
             }
