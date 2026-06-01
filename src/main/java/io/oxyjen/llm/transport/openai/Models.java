@@ -1,7 +1,5 @@
 package io.oxyjen.llm.transport.openai;
 
-
-
 import java.util.HashMap;
 import java.util.Map;
 
