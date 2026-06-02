@@ -239,7 +239,7 @@ class ValidationNode implements NodePlugin<String, String> {
         if (input == null || input.isEmpty()) {
             throw new IllegalArgumentException("Input cannot be empty");
         }
-        ctx.getLogger().info("✓ Input validated");
+        ctx.getLogger().info("Input validated");
         return input;
     }
 }
@@ -249,7 +249,7 @@ class ProcessingNode implements NodePlugin<String, String> {
     public String process(String input, NodeContext ctx) {
         String processed = input.toUpperCase().trim();
         ctx.set("word_count", processed.split(" ").length);
-        ctx.getLogger().info("✓ Text processed");
+        ctx.getLogger().info("Text processed");
         return processed;
     }
 }
@@ -261,7 +261,7 @@ class FormatterNode implements NodePlugin<String, String> {
         String formatted = input.length() > maxLength 
             ? input.substring(0, maxLength) + "..." 
             : input;
-        ctx.getLogger().info("✓ Text formatted");
+        ctx.getLogger().info("Text formatted");
         return formatted;
     }
 }
@@ -282,8 +282,6 @@ class FormatterNode implements NodePlugin<String, String> {
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
 - **Multi-tenancy** - Isolate data between users/orgs
-- **Async execution** - Run nodes in parallel
-- **DAG support** - Complex branching workflows
 - **Circuit breakers** - Fail fast when services are down
 - **Streaming responses**
 - **Token counting & cost tracking**
@@ -295,6 +293,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - [Oxyjen v0.2](docs/v0.2.md)
 - [Oxyjen v0.3](docs/v0.3.md)
 - [Oxyjen v0.4](docs/v0.4.md)
+- [Oxyjen v0.5](docs/v0.5.md)
 
 ---
 
@@ -348,6 +347,7 @@ After installation, verify by importing:
 import io.oxyjen.core.*;
 import io.oxyjen.llm.*;
 import io.oxyjen.tools.*;
+import io.oxyjen.graph.*;
 ```
 ---
 
