@@ -1,4 +1,4 @@
-package io.oxyjen.core.graphs;
+package io.oxyjen.core.graphs.concurrency;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
