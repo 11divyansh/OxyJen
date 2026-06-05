@@ -1,10 +1,15 @@
 package io.oxyjen.core;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
@@ -147,6 +152,15 @@ public class GraphBuilder {
         for (Edge edge : edgesToBuild) {
         	graph.addEdge(edge);
         }
+        for (String targetName : anyFailureTargets) {
+            resolveFailureHandlingNodes(targetName).forEach(graph::markAsFailureHandler);
+        }
+        System.out.println("[GraphBuilder] All edges:");
+        for (Edge e : edgesToBuild) {
+            System.out.println("  " + e.getSource().getName() 
+                + " --[" + e.getClass().getSimpleName() + "]--> " 
+                + e.getTarget().getName());
+        }
         long uniqueNames = nodes.values().stream()
                 .map(NodePlugin::getName)
                 .distinct()
@@ -160,10 +174,13 @@ public class GraphBuilder {
     private void addAnyFailureEdges(List<Edge> edgesToBuild) {
         for (String targetName : anyFailureTargets) {
             NodePlugin<?, ?> target = getNode(targetName);
+            // Find all nodes that are part of the failure handling path
+            // to exclude them from getting failure edges
+            Set<String> failureHandlingNodes = resolveFailureHandlingNodes(targetName);
             for (NodePlugin<?, ?> source : nodes.values()) {
-                if (source == target) {
-                    continue;
-                }
+                if (source == target) continue;
+                // skip any node that is downstream of the failure target
+                if (failureHandlingNodes.contains(source.getName())) continue;
                 if (!hasFailureEdge(edgesToBuild, source, target)) {
                     edgesToBuild.add(new FailureEdge(source, target));
                 }
@@ -190,6 +207,31 @@ public class GraphBuilder {
     		throw new IllegalArgumentException("Node not found: " + name);
     	}
     	return node;
+    }
+    
+    /**
+     * Walks forward from the failure target node through direct edges
+     * to find all nodes in the failure handling subgraph.
+     * These nodes should not get failure edges - they are already in the failure path.
+     */
+    private Set<String> resolveFailureHandlingNodes(String startName) {
+        Set<String> visited = new HashSet<>();
+        Queue<String> queue = new LinkedList<>();
+        queue.add(startName);
+
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            if (!visited.add(current)) continue;
+
+            // Walk direct edges forward from this node
+            for (Edge edge : edges) {
+                if (edge instanceof FailureEdge) continue; // don't follow failure edges
+                if (edge.getSource().getName().equals(current)) {
+                    queue.add(edge.getTarget().getName());
+                }
+            }
+        }
+        return visited;
     }
     public static class RouteBuilder {
         private final GraphBuilder builder;

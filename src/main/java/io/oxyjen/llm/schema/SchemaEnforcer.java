@@ -94,14 +94,20 @@ public final class SchemaEnforcer {
     }
     
     private String buildInitialPrompt(String userPrompt) {
-        return userPrompt + "\n\n" +
-                "You MUST return a valid JSON object.\n" +
-                "Do NOT include explanations.\n" +
-                "Do NOT include markdown.\n" +
-                "Do NOT wrap the response in code blocks.\n" +
-                "Return ONLY raw JSON.\n\n" +
-                "The JSON must match this schema exactly:\n\n" +
-                schemaJson;
+    	return userPrompt + "\n\n" +
+                "INSTRUCTIONS:\n" +
+                "- Return ONLY a raw JSON object as your entire response.\n" +
+                "- Do NOT include any text, explanation, or markdown.\n" +
+                "- Do NOT wrap fields inside a 'properties' key.\n" +
+                "- Do NOT copy the schema structure — fill in actual values.\n" +
+                "- The schema below describes the SHAPE of JSON you must return.\n" +
+                "- Use \"unknown\" for missing scalar fields.\n" +
+                "- Use [] for missing array fields.\n\n" +
+                "EXAMPLE of correct output format (fill with real values, not these):\n" +
+                buildExample() + "\n\n" +
+                "SCHEMA (describes required fields and types):\n" +
+                schemaJson + "\n\n" +
+                "REMEMBER: Return ONLY the flat JSON object. No nesting under 'properties'.";
     }
     
     private String buildRetryPrompt(
@@ -120,6 +126,11 @@ public final class SchemaEnforcer {
                 "No markdown.\n\n" +
                 "Please return ONLY corrected JSON matching this schema:\n" +
                 schemaJson;
+    }
+    
+    private String buildExample() {
+        // Generic example showing flat structure
+        return "{\"field1\": \"value1\", \"field2\": \"value2\", \"listField\": [\"item1\"]}";
     }
     
     private String extractJSON(String response) {

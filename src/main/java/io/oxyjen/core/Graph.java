@@ -48,6 +48,7 @@ public class Graph {
     private final boolean allowCycles;
     private final LinkedHashSet<NodePlugin<?, ?>> nodes = new LinkedHashSet<>();
     private final Map<NodePlugin<?, ?>, List<Edge>> adjacency = new LinkedHashMap<>();
+    private final Set<String> failureHandlerNodes = new HashSet<>();
 
     Graph(String name, boolean allowCycles) {
     	this.name = (name == null || name.isBlank())
@@ -125,6 +126,11 @@ public class Graph {
         adjacency.values().forEach(all::addAll);
         return Collections.unmodifiableList(all);
     }
+    
+    public void markAsFailureHandler(String nodeName) {
+        failureHandlerNodes.add(nodeName);
+    }
+    
     /**
      * @return Nodes with no incoming edges (graph entry points).
      */
@@ -141,6 +147,8 @@ public class Graph {
         }
         Set<NodePlugin<?, ?>> roots = new LinkedHashSet<>(nodes);
         roots.removeAll(hasIncoming);
+     // Exclude failure handler nodes from being treated as roots
+        roots.removeIf(n -> failureHandlerNodes.contains(n.getName()));
         return Collections.unmodifiableSet(roots);
     }
     

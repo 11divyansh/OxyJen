@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+import io.oxyjen.llm.Models;
 import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
 import io.oxyjen.llm.exceptions.LLMException;
 import io.oxyjen.llm.exceptions.ModelNotFoundException;

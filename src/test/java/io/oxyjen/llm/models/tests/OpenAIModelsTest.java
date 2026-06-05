@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import io.oxyjen.llm.transport.openai.Models;
+import io.oxyjen.llm.Models;
 
 public class OpenAIModelsTest {
 	

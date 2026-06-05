@@ -1,6 +1,7 @@
 package io.oxyjen.llm.transport.openai;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.Models;
 
 /**
 * Factory for creating OpenAI ChatModels.
