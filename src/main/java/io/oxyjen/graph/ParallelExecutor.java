@@ -254,12 +254,12 @@ public class ParallelExecutor {
                     if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
                     NodePlugin<?, ?> target = edge.getTarget();
                     if (routed.routes().containsKey(target.getName())) continue; // already handled above
-                    if (scheduled.add(target.getName())) {
-                        routerFutures.add(executeNodeAsync(
-                            target, output, graph, context,
-                            nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures
-                        ));
-                    }
+                    // direct edge targets from RouterNode are always unique and should always execute
+                    scheduled.add(target.getName()); // mark as scheduled
+                    routerFutures.add(executeNodeAsync(
+                    	target, input, graph, context,
+                    	nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures
+                    ));
                 }
                 if (!routerFutures.isEmpty()) {
                     CompletableFuture<Void> composed = CompletableFuture.allOf(routerFutures.toArray(new CompletableFuture[0]))

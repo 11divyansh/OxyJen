@@ -28,17 +28,19 @@ import io.oxyjen.execution.result.Success;
 import io.oxyjen.execution.result.TaskResult;
 
 /**
-* Executes a fixed set of {@link NodePlugin}s concurrently, all receiving the same input.
+* Executes a fixed set of pure Java functions concurrently, all receiving the same input.
 *
-* ParallelNode is a self-contained fan-out + fan-in: it submits all registered tasks
-* to a thread pool, waits for all to complete (or timeout), and returns a
-* {@link ParallelResult} containing each task's output keyed by node name.
+* ParallelNode is designed for lightweight, deterministic fan-out:
+* validation checks, data transforms, field extractions — tasks
+* that don't need LLM calls, memory, or NodeContext.
 *
-* This is different from RouterNode + MergeNode:
-* - RouterNode/MergeNode: fan-out lives in the graph topology (separate nodes, separate edges)
-* - ParallelNode: fan-out is encapsulated inside a single node - simpler for fixed task sets
+* For parallel LLM calls or full NodePlugin fan-out,
+* use RouterNode + MergeNode instead - that keeps each node
+* visible in the graph topology with proper failure routing,
+* retry, and logging per node.
 *
 * Use ParallelNode when:
+* - Tasks are pure Java (no LLM calls)
 * - You have a fixed, known set of tasks to run on one input
 * - You want the parallelism encapsulated (not visible in the graph topology)
 * - Tasks are independent and don't need to communicate

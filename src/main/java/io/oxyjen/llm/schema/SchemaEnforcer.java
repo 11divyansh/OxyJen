@@ -1,9 +1,12 @@
 package io.oxyjen.llm.schema;
 
 import java.util.List;
+import java.util.Map;
 
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.schema.FieldError.ErrorType;
+import io.oxyjen.util.JsonParser;
+import io.oxyjen.util.JsonSerializer;
 
 /**
  * Enforces JSON schema by retrying until valid output.
@@ -57,6 +60,7 @@ public final class SchemaEnforcer {
             String json;
             try {
             	json = extractJSON(response);
+            	json = stripUnknownFields(json, schema);
             } catch (Exception extractionError) {
             	lastErrors = List.of(
                         new FieldError(
@@ -131,6 +135,24 @@ public final class SchemaEnforcer {
     private String buildExample() {
         // Generic example showing flat structure
         return "{\"field1\": \"value1\", \"field2\": \"value2\", \"listField\": [\"item1\"]}";
+    }
+    
+    private String stripUnknownFields(String json, JSONSchema schema) {
+        try {
+            Object parsed = JsonParser.parse(json);
+            if (!(parsed instanceof Map)) return json;
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) parsed;
+
+            // Remove any key not defined in schema properties
+            map.keySet().retainAll(schema.properties().keySet());
+
+            // Re-serialize back to JSON string
+            return JsonSerializer.toJsonString(map);
+        } catch (Exception e) {
+            return json; // if stripping fails, return original
+        }
     }
     
     private String extractJSON(String response) {
