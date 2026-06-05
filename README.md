@@ -285,6 +285,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - **Circuit breakers** - Fail fast when services are down
 - **Streaming responses**
 - **Token counting & cost tracking**
+- **Async/reactive API**
 
 ---
 
