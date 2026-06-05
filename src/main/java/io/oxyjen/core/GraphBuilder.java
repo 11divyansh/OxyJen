@@ -155,12 +155,6 @@ public class GraphBuilder {
         for (String targetName : anyFailureTargets) {
             resolveFailureHandlingNodes(targetName).forEach(graph::markAsFailureHandler);
         }
-        System.out.println("[GraphBuilder] All edges:");
-        for (Edge e : edgesToBuild) {
-            System.out.println("  " + e.getSource().getName() 
-                + " --[" + e.getClass().getSimpleName() + "]--> " 
-                + e.getTarget().getName());
-        }
         long uniqueNames = nodes.values().stream()
                 .map(NodePlugin::getName)
                 .distinct()

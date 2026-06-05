@@ -147,7 +147,7 @@ public class Graph {
         }
         Set<NodePlugin<?, ?>> roots = new LinkedHashSet<>(nodes);
         roots.removeAll(hasIncoming);
-     // Exclude failure handler nodes from being treated as roots
+        // Exclude failure handler nodes from being treated as roots
         roots.removeIf(n -> failureHandlerNodes.contains(n.getName()));
         return Collections.unmodifiableSet(roots);
     }

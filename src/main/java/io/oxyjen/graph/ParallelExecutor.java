@@ -22,6 +22,7 @@ import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.CyclicEdge;
+import io.oxyjen.graph.edges.FailureEdge;
 import io.oxyjen.graph.validation.DAGValidator;
 
 public class ParallelExecutor {
@@ -246,6 +247,18 @@ public class ParallelExecutor {
                     NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
                     if (scheduled.add(target.getName())) {
                         routerFutures.add(executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures));
+                    }
+                }
+                
+                for (Edge edge : graph.getEdgesFrom(node)) {
+                    if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
+                    NodePlugin<?, ?> target = edge.getTarget();
+                    if (routed.routes().containsKey(target.getName())) continue; // already handled above
+                    if (scheduled.add(target.getName())) {
+                        routerFutures.add(executeNodeAsync(
+                            target, output, graph, context,
+                            nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures
+                        ));
                     }
                 }
                 if (!routerFutures.isEmpty()) {

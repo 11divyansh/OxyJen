@@ -36,6 +36,46 @@ public final class JsonSerializer {
     public static Object toJsonTree(Object obj) {
     	return toJsonTree(obj, new IdentityHashMap<>());
     }
+    
+    public static String toJsonString(Object obj) {
+        Object tree = toJsonTree(obj);
+        return treeToString(tree);
+    }
+    
+    private static String treeToString(Object value) {
+        if (value == null) return "null";
+        if (value instanceof String s)
+            return "\"" + s.replace("\\", "\\\\")
+                           .replace("\"", "\\\"")
+                           .replace("\n", "\\n")
+                           .replace("\r", "\\r")
+                           .replace("\t", "\\t") + "\"";
+        if (value instanceof Boolean || value instanceof Number)
+            return value.toString();
+        if (value instanceof List<?> list) {
+            StringBuilder sb = new StringBuilder("[");
+            boolean first = true;
+            for (Object item : list) {
+                if (!first) sb.append(",");
+                sb.append(treeToString(item));
+                first = false;
+            }
+            return sb.append("]").toString();
+        }
+        if (value instanceof Map<?, ?> map) {
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!first) sb.append(",");
+                sb.append("\"").append(entry.getKey()).append("\":");
+                sb.append(treeToString(entry.getValue()));
+                first = false;
+            }
+            return sb.append("}").toString();
+        }
+        return "\"" + value + "\"";
+    }
+    
     private static Object toJsonTree(Object obj, IdentityHashMap<Object, Boolean> visited) {
         if (obj == null) return null;
         if (obj instanceof String
