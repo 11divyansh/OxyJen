@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
 import io.oxyjen.llm.exceptions.LLMException;
 import io.oxyjen.llm.exceptions.NetworkException;
 import io.oxyjen.llm.exceptions.RateLimitException;
@@ -86,7 +87,7 @@ public final class LLMChain implements ChatModel {
                    log("Failed: " + e.getMessage());
                    
                    if (attempt < maxRetries && shouldRetry(e)) {
-                       long backoffMs = calculateBackoff(attempt);
+                       long backoffMs = calculateBackoff(attempt, lastException);
                        log("Retrying in " + backoffMs + "ms...");
                        sleep(backoffMs);
                    } else {
@@ -108,14 +109,24 @@ public final class LLMChain implements ChatModel {
        String message = e.getMessage();
        if (message == null) return false;
        
+       if (e instanceof InvalidAPIKeyException) return false;
        return e instanceof RateLimitException ||
               e instanceof NetworkException ||
               e instanceof TimeoutException ;
          
    }
    
-   private long calculateBackoff(int attempt) {
-	   // 1. Calculate base delay
+   private long calculateBackoff(int attempt, Exception lastException) {
+	    // Rate limit needs much longer wait — at least 30s
+	    if (lastException instanceof RateLimitException) {
+	        long seconds = 30L * attempt; // 30s, 60s, 90s
+	        Duration base = Duration.ofSeconds(seconds);
+	        if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
+	            base = maxBackoff;
+	        }
+	        return base.toMillis();
+	    }	
+	    // 1. Calculate base delay
 	    Duration base;
 	    if (exponentialBackoff) {
 	        // Exponential: 1s, 2s, 4s, 8s, 16s....
