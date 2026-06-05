@@ -1,4 +1,7 @@
 package io.oxyjen.llm;
+import java.time.Duration;
+
+import io.oxyjen.llm.transport.gemini.GeminiModels;
 import io.oxyjen.llm.transport.openai.OpenAIModels;
 /**
  * Public entry point for Oxyjen LLM system.
@@ -46,15 +49,14 @@ public final class LLM {
             return OpenAIModels.create(model);
         }
         
-        // v0.3: More providers
-        // if (normalized.startsWith("claude")) {
-        //     return AnthropicModels.create(model);
-        // }
+        if (normalized.startsWith("gemini/")) {
+            return GeminiModels.create(model);
+        }
         
         throw new IllegalArgumentException(
             "Unknown model: " + model + "\n" +
             "Supported in v0.2: gpt-4o, gpt-4o-mini, gpt-3.5-turbo\n" +
-            "Coming in v0.3: claude-*, gemini-*"
+            "Coming in future versions: claude-*, ollama"
         );
     }
     
@@ -118,6 +120,19 @@ public final class LLM {
     public static ChatModel gpt4oMini() {
         return of("gpt-4o-mini");
     }
+    
+    public static ChatModel gemini(String model) {
+        return GeminiModels.create(model);
+    }
+
+    public static ChatModel gemini(String model, String apiKey) {
+        return GeminiModels.create(model, apiKey);
+    }
+
+    public static ChatModel gemini(String model, String apiKey, Duration requestTimeout) {
+        return GeminiModels.create(model, apiKey, requestTimeout);
+    }
+    
     
     // TODO v0.4+: expose profile registration via LLM
 }

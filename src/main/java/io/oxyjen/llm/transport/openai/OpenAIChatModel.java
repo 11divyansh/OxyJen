@@ -75,10 +75,6 @@ public final class OpenAIChatModel implements ChatModel {
     /**
      * Set temperature (0.0 to 2.0).
      * Controls randomness - lower is more deterministic.
-     * 
-     * NOTE: This doesn't fit ChatModel interface yet.
-     * For v0.2, we keep ChatModel minimal.
-     * These will be used via builder pattern in v0.3.
      */
     public OpenAIChatModel withTemperature(double temp) {
         this.temperature = temp;

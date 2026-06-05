@@ -21,12 +21,11 @@ public final class Models {
     public static final String GPT_4 = "gpt-4";
     public static final String GPT_35_TURBO = "gpt-3.5-turbo";
     
-    public static final String OLLAMA_LLAMA3 = "ollama/llama3";
-    public static final String OLLAMA_LLAMA3_LATEST = "ollama/llama3:latest";
-    public static final String OLLAMA_MISTRAL = "ollama/mistral";
-    public static final String OLLAMA_GEMMA2 = "ollama/gemma2";
-    public static final String OLLAMA_PHI3 = "ollama/phi3";
-    public static final String OLLAMA_DEEPSEEK = "ollama/deepseek-r1";
+    public static final String GEMINI_2_FLASH      = "gemini/gemini-2.0-flash";
+    public static final String GEMINI_FLASH_LATEST = "gemini/gemini-flash-latest";
+    public static final String GEMINI_2_FLASH_LITE = "gemini/gemini-2.0-flash-lite";
+    public static final String GEMINI_15_PRO       = "gemini/gemini-1.5-pro";
+    public static final String GEMINI_15_FLASH     = "gemini/gemini-1.5-flash";
     
     private static final Map<String, ModelInfo> MODELS = new HashMap<>();
     
@@ -49,12 +48,11 @@ public final class Models {
         // GPT-3.5-turbo
         MODELS.put(GPT_35_TURBO, new ModelInfo(GPT_35_TURBO, 16_385));
         
-        MODELS.put(OLLAMA_LLAMA3,    new ModelInfo(OLLAMA_LLAMA3,   128_000));
-        MODELS.put(OLLAMA_MISTRAL,   new ModelInfo(OLLAMA_MISTRAL,    32_000));
-        MODELS.put(OLLAMA_GEMMA2,    new ModelInfo(OLLAMA_GEMMA2,     8_192));
-        MODELS.put(OLLAMA_PHI3,      new ModelInfo(OLLAMA_PHI3,      128_000));
-        MODELS.put(OLLAMA_DEEPSEEK,  new ModelInfo(OLLAMA_DEEPSEEK,  128_000));
-        MODELS.put(OLLAMA_LLAMA3_LATEST, new ModelInfo(OLLAMA_LLAMA3_LATEST, 128_000));
+        MODELS.put(GEMINI_2_FLASH,      new ModelInfo(GEMINI_2_FLASH,       1_048_576));
+        MODELS.put(GEMINI_FLASH_LATEST, new ModelInfo(GEMINI_FLASH_LATEST, 1_048_576));
+        MODELS.put(GEMINI_2_FLASH_LITE, new ModelInfo(GEMINI_2_FLASH_LITE,  1_048_576));
+        MODELS.put(GEMINI_15_PRO,       new ModelInfo(GEMINI_15_PRO,        2_097_152));
+        MODELS.put(GEMINI_15_FLASH,     new ModelInfo(GEMINI_15_FLASH,      1_048_576));
     }
     
     /**
