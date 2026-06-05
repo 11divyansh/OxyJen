@@ -40,7 +40,7 @@ public final class GeminiChatModel implements ChatModel {
      * Create Gemini chat model.
      * 
      * @param apiKey Gemini API key
-     * @param model Model name (e.g., "GEMINI_2_FLASH", "GEMINI_FLASH_LATEST")
+     * @param model Model name (e.g., "gemini/gemini-flash-latest")
      */
     public GeminiChatModel(String apiKey, String model) {
         this.client = new GeminiClient(apiKey);

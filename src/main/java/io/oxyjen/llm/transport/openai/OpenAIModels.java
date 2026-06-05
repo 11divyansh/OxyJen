@@ -70,7 +70,5 @@ public final class OpenAIModels {
        return new OpenAIChatModel(apiKey, modelName);
    }
    
-   private OpenAIModels() {
-       // No instances
-   }
+   private OpenAIModels() {}
 }
