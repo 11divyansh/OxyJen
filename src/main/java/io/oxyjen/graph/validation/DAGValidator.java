@@ -1,10 +1,14 @@
 package io.oxyjen.graph.validation;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -14,10 +18,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.branching.BranchNode;
+import io.oxyjen.graph.branching.MergeNode;
+import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
@@ -173,6 +181,7 @@ public final class DAGValidator {
         }
     }
     
+    // acts as a compile-time safety net until auto unwrapping, output adapters or typed builder is introduced
     private static void detectTypeIncompatibilities(
             Graph graph,
             List<String> errors,
@@ -184,13 +193,27 @@ public final class DAGValidator {
 
             NodePlugin<?, ?> source = edge.getSource().unwrap();
             NodePlugin<?, ?> target = edge.getTarget().unwrap();
+            
+            // These nodes have special output handling in ParallelExecutor
+            if (source instanceof BranchNode ||
+            	source instanceof RouterNode ||
+            	source instanceof MergeNode) continue;
             Type sourceOutput = resolveOutputType(source);
             Type targetInput  = resolveInputType(target);
 
             if (sourceOutput == null || targetInput == null) continue; // can't determine
+            
 
             // Object input accepts anything. Common in prompt nodes
-            if (isObjectType(targetInput)) continue;
+            if (isObjectType(targetInput) || isObjectType(sourceOutput)) continue;
+            if (!isAssignable(sourceOutput, targetInput)) {
+                errors.add("Type mismatch on edge [" + edge.getSource().getName()
+                    + "] -> [" + edge.getTarget().getName() + "]: "
+                    + "source outputs [" + typeName(sourceOutput) + "] "
+                    + "but target expects [" + typeName(targetInput) + "]. "
+                    + "Check your .connect() call in GraphBuilder."
+                );
+            }
         }
     }
     
@@ -250,6 +273,44 @@ public final class DAGValidator {
         return null;
     }
     
+    /**
+     * Checks if sourceOutput is assignable to targetInput.
+     * Handles Class, ParameterizedType, wildcards.
+     */
+    private static boolean isAssignable(Type sourceOutput, Type targetInput) {
+    	Class<?> sourceRaw = rawType(sourceOutput);
+    	Class<?> targetRaw = rawType(targetInput);
+    	if (sourceRaw == null || targetRaw == null) return false;
+    	return targetRaw.isAssignableFrom(sourceRaw);
+    }
+    
+    /** Extracts the raw Class from any Type.*/
+    private static Class<?> rawType(Type type) {
+    	if (type instanceof Class<?> c) return c;
+    	if (type instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> c) return c;
+    	if (type instanceof WildcardType wt) {
+    		Type[] upper = wt.getUpperBounds();
+    		if (upper.length > 0) return rawType(upper[0]);
+    	}
+    	if (type instanceof GenericArrayType gat) {
+    		Class<?> component = rawType(gat.getGenericComponentType());
+    		if (component != null) return Array.newInstance(component, 0).getClass();
+    	}
+    	return null;
+    }
+    
+    private static String typeName(Type type) {
+        if (type instanceof Class<?> c) return c.getSimpleName();
+        if (type instanceof ParameterizedType pt) {
+            String raw = rawType(pt) != null ? rawType(pt).getSimpleName() : "?";
+            String args = Arrays.stream(pt.getActualTypeArguments())
+                    .map(DAGValidator::typeName)
+                    .collect(Collectors.joining(", "));
+            return raw + "<" + args + ">";
+        }
+        return type.getTypeName();
+    }
+    
     private static boolean isObjectType(Type type) {
         return type instanceof Class<?> c && c == Object.class;
     }
@@ -277,7 +338,7 @@ public final class DAGValidator {
  
         public String summaryMessage() {
             StringBuilder sb = new StringBuilder("Graph validation failed:\n");
-            errors.forEach(e -> sb.append("  ERROR:   ").append(e).append("\n"));
+            errors.forEach(e -> sb.append("  ERROR: ").append(e).append("\n"));
             warnings.forEach(w -> sb.append("  WARNING: ").append(w).append("\n"));
             return sb.toString().trim();
         }
