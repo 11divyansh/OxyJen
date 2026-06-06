@@ -5,10 +5,8 @@ package io.oxyjen.llm;
  * 
  * This is the ROOT abstraction. Everything else exists to produce a ChatModel.
  * 
- * Rules for v0.2:
- * - No temperature, tokens, tools, messages
- * - Just: input string → output string
- * - Keeping it boring
+ * Just: input string → output string
+ * Keeping it boring
  */
 public interface ChatModel {
     

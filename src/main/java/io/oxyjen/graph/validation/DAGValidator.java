@@ -1,5 +1,8 @@
 package io.oxyjen.graph.validation;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,7 +18,9 @@ import java.util.Set;
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
+import io.oxyjen.graph.edges.DirectEdge;
 import io.oxyjen.graph.edges.FailureEdge;
 
 /**
@@ -60,6 +65,7 @@ public final class DAGValidator {
         detectIllegalCycles(graph, errors);
         detectUnreachableNodes(graph, warnings);
         detectOrphanNodes(graph, warnings);
+        detectTypeIncompatibilities(graph, errors, warnings);
         return new ValidationResult(errors, warnings);
     }
   
@@ -166,6 +172,88 @@ public final class DAGValidator {
             }
         }
     }
+    
+    private static void detectTypeIncompatibilities(
+            Graph graph,
+            List<String> errors,
+            List<String> warnings
+    ) {
+        for (Edge edge : graph.getAllEdges()) {
+            // skip failure/cyclic - they carry NodeFailure or loop back, not typed
+            if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
+
+            NodePlugin<?, ?> source = edge.getSource().unwrap();
+            NodePlugin<?, ?> target = edge.getTarget().unwrap();
+            Type sourceOutput = resolveOutputType(source);
+            Type targetInput  = resolveInputType(target);
+
+            if (sourceOutput == null || targetInput == null) continue; // can't determine
+
+            // Object input accepts anything. Common in prompt nodes
+            if (isObjectType(targetInput)) continue;
+        }
+    }
+    
+    /**
+     * Resolves the OUTPUT type (O) of a NodePlugin<I, O> implementation.
+     * Walks generic interfaces and superclass to find NodePlugin parameterization.
+     */
+    private static Type resolveOutputType(NodePlugin<?, ?> node) {
+        return resolveTypeArg(node.getClass(), 1);
+    }
+
+    /**
+     * Resolves the INPUT type (I) of a NodePlugin<I, O> implementation.
+     */
+    private static Type resolveInputType(NodePlugin<?, ?> node) {
+        return resolveTypeArg(node.getClass(), 0);
+    }
+    
+    private static Type resolveTypeArg(Class<?> clazz, int argIndex) {
+        if (clazz == null || clazz == Object.class) return null;
+
+        // Check direct interfaces
+        for (Type iface : clazz.getGenericInterfaces()) {
+            if (iface instanceof ParameterizedType pt
+                    && pt.getRawType() instanceof Class<?> raw
+                    && raw == NodePlugin.class) {
+                Type arg = pt.getActualTypeArguments()[argIndex];
+                // If it's a TypeVariable (e.g. <T>) we can't resolve - return null
+                if (arg instanceof TypeVariable<?>) return null;
+                return arg;
+            }
+        }
+
+        // Check superclass (for abstract base classes implementing NodePlugin)
+        Type superclass = clazz.getGenericSuperclass();
+        if (superclass instanceof ParameterizedType pt
+                && pt.getRawType() instanceof Class<?> raw
+                && raw == NodePlugin.class) {
+            Type arg = pt.getActualTypeArguments()[argIndex];
+            if (arg instanceof TypeVariable<?>) return null;
+            return arg;
+        }
+
+        // Recurse up the hierarchy
+        if (superclass instanceof Class<?> sc) {
+            Type result = resolveTypeArg(sc, argIndex);
+            if (result != null) return result;
+        }
+
+        // Recurse into interfaces
+        for (Type iface : clazz.getGenericInterfaces()) {
+            if (iface instanceof Class<?> ic) {
+                Type result = resolveTypeArg(ic, argIndex);
+                if (result != null) return result;
+            }
+        }
+        return null;
+    }
+    
+    private static boolean isObjectType(Type type) {
+        return type instanceof Class<?> c && c == Object.class;
+    }
+
     
     public static final class ValidationResult {   	 
         private final List<String> errors;
