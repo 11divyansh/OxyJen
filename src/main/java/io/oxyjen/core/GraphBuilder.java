@@ -3,7 +3,6 @@ package io.oxyjen.core;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,10 +12,12 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
+import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
 import io.oxyjen.graph.edges.FailureEdge;
+import io.oxyjen.graph.edges.RouteEdge;
 
 /**
  * Builder pattern for constructing {@link Graph} instances.
@@ -54,7 +55,11 @@ public class GraphBuilder {
     public GraphBuilder connect(String from, String to) {
         NodePlugin<?, ?> source = getNode(from);
         NodePlugin<?, ?> target = getNode(to);
-        edges.add(new DirectEdge(source, target));
+        if (source.unwrap() instanceof RouterNode<?> router && router.hasRoute(to)) {
+        	edges.add(new RouteEdge(source, target));
+        } else {
+        	edges.add(new DirectEdge(source, target));
+        }
         return this;
     }
     /**

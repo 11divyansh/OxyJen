@@ -102,6 +102,10 @@ public class RouterNode<I> implements NodePlugin<I, Object> {
         }
         return new RoutedResult(fired);
     }
+    
+    public boolean hasRoute(String targetNodeName) {
+        return routes.stream().anyMatch(r -> r.nextNode().equals(targetNodeName));
+    }
 
     @Override
     public String getName() {

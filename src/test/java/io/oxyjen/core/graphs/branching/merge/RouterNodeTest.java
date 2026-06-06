@@ -1,6 +1,7 @@
 package io.oxyjen.core.graphs.branching.merge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +94,36 @@ class RouterNodeTest {
 	    NodeContext ctx = new NodeContext();
 	    Map<String, Object> result = executor.run(graph, "xyz", ctx);
 	    assertTrue(result.isEmpty() || result.get("A") == null);
+	}
+	
+	@Test
+	void router_two_routers_pointing_to_same_node_neither_fires() {
+	    // Both RouterNodes point to A but neither route fires
+	    // hasOtherIncoming = true for A (RouterNode2 is "other incoming" from RouterNode1's perspective)
+	    // A should NOT execute — but with heuristic it WILL execute incorrectly
+	    
+	    Graph graph = GraphBuilder.named("two-routers-same-target")
+	        .addNode("router1",
+	            RouterNode.<String>builder()
+	                .route("hasA", s -> s.contains("a"), "A")
+	                .build("router1")
+	        )
+	        .addNode("router2",
+	            RouterNode.<String>builder()
+	                .route("hasB", s -> s.contains("b"), "A")
+	                .build("router2")
+	        )
+	        .addNode("A", new AppendNode("_A"))
+	        .connect("router1", "A")
+	        .connect("router2", "A")
+	        .build();
+
+	    ParallelExecutor executor = new ParallelExecutor();
+	    NodeContext ctx = new NodeContext();
+	    Map<String, Object> result = executor.run(graph, "xyz", ctx); // neither "a" nor "b"
+
+	    // A should NOT have executed since no route fired
+	    assertNull(result.get("A")); // this will FAIL with current heuristic
 	}
 	@Test
 	void router_require_at_least_one() {
