@@ -138,7 +138,7 @@ public final class ExecutionRuntime {
             this.maxConcurrency = max;
             return this;
         }
- 
+        
         /**
          * How the runtime handles task failures globally.
          * Individual nodes can override this if needed, but the runtime

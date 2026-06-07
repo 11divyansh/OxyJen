@@ -222,6 +222,15 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
  
     @Override
     public MapResult<O> process(Iterable<I> input, NodeContext context) {
+    	// In MapNode.process()
+    	if (maxInFlight <= 0) {
+    	    context.getLogger().warning(
+    	        "[MapNode:" + name + "] No maxInFlight set. " +
+    	        "If your mapWith() lambda makes LLM calls, set maxInFlight " +
+    	        "to prevent API rate limiting. Recommended: maxInFlight(3)"
+    	    );
+    	}
+    	// v0.6+ will use reflection to detect llm calls inside lambda
     	 List<I> elements = new ArrayList<>();
          input.forEach(elements::add);
          if (elements.isEmpty()) {
@@ -238,7 +247,6 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
          }
   
          ExecutorService executor = runtime.getExecutor();
-         Semaphore limiter        = runtime.getLimiter();
          boolean failFast         = runtime.getFailureMode() == ExecutionRuntime.FailureMode.FAIL_FAST
                                     && !continueOnError;
   
@@ -261,7 +269,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
   
          // Seed the initial window - limiter acquired before submit
          while (submitted < elements.size() && submitted < windowSize) {
-             Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, limiter, context);
+             Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, context);
              submittedFutures.add(f);
              submitted++;
          }
@@ -331,7 +339,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
   
              // Submit next - limiter already acquired in submitOne before submit
              if (submitted < elements.size()) {
-                 Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, limiter, context);
+                 Future<IndexedResult<O>> f = submitOne(submitted, elements, ecs, context);
                  submittedFutures.add(f);
                  submitted++;
              }
@@ -377,17 +385,9 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             int index,
             List<I> elements,
             ExecutorCompletionService<IndexedResult<O>> ecs,
-            Semaphore limiter,
             NodeContext context
     ) {
         final I element = elements.get(index);
- 
-        try {
-            limiter.acquire(); // blocks calling (orchestration) thread, not worker
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("[MapNode:" + name + "] interrupted acquiring limiter", e);
-        }
  
         try {
             return ecs.submit(() -> {
@@ -402,14 +402,10 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                         throw vme;
                     }
                     return new IndexedResult<>(index, new Failure<>(t));
-                } finally {
-                    limiter.release();
                 }
             });
         } catch (RuntimeException e) {
             // ecs.submit() threw (executor shutdown, rejection, OOM)
-            // permit was acquired but task never submitted - release it now
-            limiter.release();
             throw e;
         }
     }

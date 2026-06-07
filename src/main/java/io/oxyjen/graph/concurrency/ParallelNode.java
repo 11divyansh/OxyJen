@@ -177,7 +177,6 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
             return runSequential(input, context);
         }
         ExecutorService executor = runtime.getExecutor();
-        Semaphore limiter = runtime.getLimiter();
         ExecutionRuntime.FailureMode failureMode = runtime.getFailureMode();
         long timeout = timeoutMs > 0 ? timeoutMs : runtime.getDefaultTimeoutMs();
         context.getLogger().info("[ParallelNode:" + name + "] Starting " + tasks.size() + " tasks");
@@ -187,20 +186,12 @@ public class ParallelNode<I,O> implements NodePlugin<I, ParallelNode.ParallelRes
         boolean failFast = failureMode == ExecutionRuntime.FailureMode.FAIL_FAST && !continueOnError;
         for (Task<I, O> task : tasks) {
             CompletableFuture<TaskResult<O>> future = CompletableFuture.supplyAsync(() -> {
-                boolean acquired = false;
                 try {
-                    limiter.acquire();
-                    acquired = true;
                     O value = task.fn().apply(input);
                     return new Success<>(value);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return new Cancelled<>("Interrupted");
                 } catch (Exception e) {
                 	return new Failure<>(e);
-                } finally {
-                    if (acquired) limiter.release();
-                }
+                } 
             }, executor);
             futures.put(task.name(), future);
         }

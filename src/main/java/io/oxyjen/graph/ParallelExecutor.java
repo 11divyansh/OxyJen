@@ -23,7 +23,10 @@ import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.FailureEdge;
+import io.oxyjen.graph.edges.RouteEdge;
 import io.oxyjen.graph.validation.DAGValidator;
+import io.oxyjen.llm.LLMNode;
+import io.oxyjen.llm.schema.SchemaNode;
 
 public class ParallelExecutor {
 	
@@ -168,12 +171,16 @@ public class ParallelExecutor {
             Set<CompletableFuture<?>> allFutures
     ) {
     	Semaphore limiter = runtime.getLimiter();
-    	try {
-    	    limiter.acquire();
-    	} catch (InterruptedException e) {
-    	    Thread.currentThread().interrupt();
-    	    throw new RuntimeException("[DAG] Interrupted waiting for limiter: " + node.getName(), e);
+    	boolean isIO = node.unwrap() instanceof LLMNode || node.unwrap() instanceof SchemaNode;
+    	if (isIO) {
+    		try {
+    			limiter.acquire();
+    		} catch (InterruptedException e) {
+    			Thread.currentThread().interrupt();
+    			throw new RuntimeException("[DAG] Interrupted waiting for limiter: " + node.getName(), e);
+    		}
     	}
+    	
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
         	//boolean acquired = false;
         	try {
@@ -222,7 +229,7 @@ public class ParallelExecutor {
                 }
                 return null; // fallback
             } finally {
-            	limiter.release();
+            	if (isIO) limiter.release();
             }           
         }, runtime.getExecutor()).thenCompose(output -> {
             if (output == null) {
@@ -252,6 +259,7 @@ public class ParallelExecutor {
                 
                 for (Edge edge : graph.getEdgesFrom(node)) {
                     if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
+                    if (edge instanceof RouteEdge) continue; // handled by routes map above
                     NodePlugin<?, ?> target = edge.getTarget();
                     if (routed.routes().containsKey(target.getName())) continue; // already handled above
                     // direct edge targets from RouterNode are always unique and should always execute
