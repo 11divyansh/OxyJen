@@ -1,3 +1,4 @@
 build:
   commands:
-    - mvn clean install -DskipTests
+    - cd oxyjen-core
+    - mvn clean install
