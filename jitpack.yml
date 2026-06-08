@@ -1,4 +1,4 @@
-jdk:
-  - openjdk17
-install:
-  - mvn clean install -DskipTests
+build:
+  commands:
+    - cd oxyjen-core
+    - mvn clean install

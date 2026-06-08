@@ -116,6 +116,10 @@ public final class LLMChain implements ChatModel {
          
    }
    
+   private long calculateBackoff(int attempt) {
+       return calculateBackoff(attempt, null);
+   }
+   
    private long calculateBackoff(int attempt, Exception lastException) {
 	    // Rate limit needs much longer wait — at least 30s
 	    if (lastException instanceof RateLimitException) {

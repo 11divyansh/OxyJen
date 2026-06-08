@@ -49,14 +49,13 @@ public class Executor {
 
         for (NodePlugin<?, ?> node : graph.getNodes()) {
             context.getLogger().info("Executing node: " + node.getName());
-
-            node.onStart(context);
-
             NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
+            NodePlugin<Object, Object> actualNode = (NodePlugin<Object, Object>) node.unwrap();
+            actualNode.onStart(context);
             
             try {
-            	current = executeNode(safeNode, current, context);
-            	node.onFinish(context);
+            	current = executeNode(actualNode, current, context);
+            	actualNode.onFinish(context);
 
             	context.getLogger().info("Completed node: " + node.getName());
             } catch(Exception e) {
@@ -64,19 +63,19 @@ public class Executor {
             	
             	if(context.getExceptionHandler() != null) {
             		try {
-            			context.getExceptionHandler().handleException(safeNode, e, context);
+            			context.getExceptionHandler().handleException(actualNode, e, context);
             		} catch(Exception ignored) {
             			context.getLogger().warning("Context ExceptionHandler failder for node: " + safeNode.getName());
             		}
             	}
             	try {
-            		safeNode.onError(e,context);
+            		actualNode.onError(e,context);
             	} catch(Exception ignored) {
             		context.getLogger().warning("Context ExceptionHandler failed for node: " + safeNode.getName());
             	}
             	
             	throw new RuntimeException(
-            		    "Node failed: " + safeNode.getName(), e
+            		    "Node failed: " + actualNode.getName(), e
             		);
          
             }

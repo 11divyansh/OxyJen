@@ -171,7 +171,9 @@ public class ParallelExecutor {
             Set<CompletableFuture<?>> allFutures
     ) {
     	Semaphore limiter = runtime.getLimiter();
-    	boolean isIO = node.unwrap() instanceof LLMNode || node.unwrap() instanceof SchemaNode;
+    	NodePlugin<?, ?> unwrappedNode = node.unwrap();
+    	boolean isIO = unwrappedNode instanceof LLMNode || unwrappedNode instanceof SchemaNode;
+    	NodePlugin<Object, Object> actualNode = (NodePlugin<Object, Object>) unwrappedNode;
     	if (isIO) {
     		try {
     			limiter.acquire();
@@ -182,13 +184,11 @@ public class ParallelExecutor {
     	}
     	
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
-        	//boolean acquired = false;
         	try {
-        		NodePlugin<Object, Object> safeNode = (NodePlugin<Object, Object>) node;
         		context.getLogger().info("[DAG] Executing: " + node.getName());
-        		safeNode.onStart(context);
-                Object output = safeNode.process(input, context);
-                safeNode.onFinish(context);
+        		actualNode.onStart(context);
+                Object output = actualNode.process(input, context);
+                actualNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
                 if (output instanceof BranchNode.RoutedResult routed) {
                 	nodeOutputs.put(node.getName(), Optional.ofNullable(routed.output()));
@@ -199,17 +199,17 @@ public class ParallelExecutor {
             } catch (Exception e) {
             	if (!(e instanceof MergeNode.MergeTimeoutException)) {
             	    context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
-            	}
+                }
                 //context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
-                try { context.getExceptionHandler().handleException((NodePlugin<Object,Object>)node, e, context); } catch (Exception ignored) {}
-                try { ((NodePlugin<Object,Object>)node).onError(e, context); } catch (Exception ignored) {}
+                try { context.getExceptionHandler().handleException(actualNode, e, context); } catch (Exception ignored) {}
+                try { actualNode.onError(e, context); } catch (Exception ignored) {}
                 context.setMetadata("failed:" + node.getName(), true);
                 ExecutionRuntime runtime = context.getRuntime();
                 ExecutionRuntime.FailureMode mode = runtime.getFailureMode();
                 switch (mode) {
                     case FAIL_FAST -> {
                         // stop everything
-                        throw new RuntimeException("Node failed: " + node.getName(), e);
+                        throw new RuntimeException("Node failed: " + actualNode.getName(), e);
                     }
 
                     case COLLECT_ERRORS -> {
