@@ -1,0 +1,245 @@
+D:\OxyJen-v0.1\oxyjen-core>mvn exec:java -Dexec.mainClass="examples.BatchDocumentExtraction"
+[INFO] Scanning for projects...
+[INFO]
+[INFO] -----------------------< io.oxyjen:oxyjen-core >------------------------
+[INFO] Building OxyJen 0.5.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- exec:3.6.3:java (default-cli) @ oxyjen-core ---
+Jun 07, 2026 11:34:11 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: start
+Jun 07, 2026 11:34:11 PM examples.BatchDocumentExtraction$CaptureDocumentsNode process
+INFO: [CaptureDocuments] Received 3 documents
+Jun 07, 2026 11:34:11 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: start
+Jun 07, 2026 11:34:11 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: batchExtractor
+Jun 07, 2026 11:34:11 PM io.oxyjen.graph.concurrency.MapNode process
+INFO: [MapNode:batchExtractor] Mapping 3 elements, window=3, globalTimeout=180000ms
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.concurrency.MapNode process
+INFO: [MapNode:batchExtractor] Done - MapResult{total=3, succeeded=3, failed=0, cancelled=0, notExecuted=0}
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: batchExtractor
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: gatherExtractions
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherExtractions] Collected 3 items from 1 source(s) using mode=SUCCESS_ONLY
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherExtractions] After filter/sort/limit: 3 items. Dropped: 0, processingTimeMs=25
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: gatherExtractions
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: unwrapExtractions
+Jun 07, 2026 11:34:22 PM examples.BatchDocumentExtraction$UnwrapExtractionsNode process
+INFO: [UnwrapExtractions] Unwrapped 3 extractions
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: unwrapExtractions
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: batchRisk
+Jun 07, 2026 11:34:22 PM io.oxyjen.graph.concurrency.MapNode process
+INFO: [MapNode:batchRisk] Mapping 3 elements, window=3, globalTimeout=180000ms
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.concurrency.MapNode process
+INFO: [MapNode:batchRisk] Done - MapResult{total=3, succeeded=3, failed=0, cancelled=0, notExecuted=0}
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: batchRisk
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: gatherRisks
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherRisks] Collected 3 items from 1 source(s) using mode=SUCCESS_ONLY
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherRisks] After filter/sort/limit: 3 items. Dropped: 0, processingTimeMs=1
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: gatherRisks
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: batchReportPrompt
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: batchReportPrompt
+Jun 07, 2026 11:34:33 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: batchReport
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Failed: Gemini rate limit exceeded. Free tier: 15 RPM, 1M TPM. Consider upgrading or adding delays.
+[LLMChain] Retrying in 30000ms...
+[LLMChain] Attempt 2 with TimedChatModel
+[LLMChain] Failed: Gemini rate limit exceeded. Free tier: 15 RPM, 1M TPM. Consider upgrading or adding delays.
+[LLMChain] Retrying in 60000ms...
+[LLMChain] Attempt 3 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:36:12 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: batchReport
+Jun 07, 2026 11:36:12 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Terminal nodes: [batchReport (unwrap=LLM[LLMChain]), failureReport (unwrap=LLM[LLMChain])]
+Jun 07, 2026 11:36:12 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] nodeOutputs keys: [unwrapExtractions, start, batchExtractor, gatherExtractions, batchReportPrompt, batchRisk, gatherRisks, batchReport]
+Jun 07, 2026 11:36:12 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Reading terminal → name=batchReport, unwrap=LLM[LLMChain], value=# BATCH DOCUMENT PROCESSING REPORT
+
+**Batch ID:** BATCH-2023-1024-A  
+**Date of Processing:** October 24, 2023  
+**Total Documents Processed:** 3  
+**Overall Batch Status:** ⚠️ **ATTENTION REQUIRED** (Contains High-Risk Documents)
+
+---
+
+## 🚨 IMMEDIATE ATTENTION: HIGH-RISK FLAGS
+The following document has been flagged as **HIGH RISK** and requires immediate manual intervention before any further processing, payment, or execution.
+
+### **Document #2: Unidentified Agreement / Contract**
+*   **Risk Level:** 🔴 **HIGH**
+*   **Primary Issues:** Unknown financial obligation, missing legal entity addresses, missing tax compliance data, and no PO number.
+*   **Immediate Action Required:** **HOLD PROCESSING.** Do not execute or approve payments. Route to the Legal and Procurement departments immediately to verify the contract value and counterparty details.
+
+---
+
+## OVERALL BATCH RISK SUMMARY
+
+| Document ID | Document Type (Est.) | Primary Parties | Risk Level | Key Issues |
+| :--- | :--- | :--- | :--- | :--- |
+| **Doc #1** | Invoice | Northwind Analytics Pvt Ltd $\
+ightarrow$ Acme Retail Operations | 🟡 **MEDIUM** | Missing PO, missing addresses, missing Tax ID. |
+| **Doc #2** | Contract / Agreement | Unknown | 🔴 **HIGH** | Unknown total amount, missing addresses, missing Tax ID, missing PO. |
+| **Doc #3** | Receipt / Invoice | Unknown Recipient | 🟡 **MEDIUM** | Unknown recipient, missing addresses, missing due date. |
+
+---
+
+## INDIVIDUAL DOCUMENT SUMMARIES & ANALYSIS
+
+### **Document #1: Invoice (Northwind Analytics to Acme Retail)**
+*   **Risk Level:** 🟡 **MEDIUM**
+*   **Summary:** An invoice issued by *Northwind Analytics Pvt Ltd* to *Acme Retail Operations*. While the parties are identified, the document lacks critical operational and tax metadata.
+*   **Identified Risks:**
+    *   Missing Purchase Order (PO) number.
+    *   Missing physical or billing addresses for both issuer and recipient.
+    *   Missing Tax ID / VAT / GST numbers.
+*   **Impact:** Lack of PO prevents automated 3-way matching, delaying payment workflows. Missing tax details pose a compliance risk for tax deductions/reporting.
+*   **Recommended Action:** Contact *Northwind Analytics* to request an updated invoice containing their Tax ID, physical address, and the correct Acme PO number.
+
+---
+
+### **Document #2: Contract / Agreement (Parties Unknown)**
+*   **Risk Level:** 🔴 **HIGH**
+*   **Summary:** A contract or agreement where the total financial obligation is completely unknown, and legal entity details are missing.
+*   **Identified Risks:**
+    *   **Total contract amount is "Unknown"** (unclear financial liability).
+    *   Missing physical addresses for both parties (invalidates legal jurisdiction/validation).
+    *   Missing tax details (high compliance and audit risk).
+    *   No associated PO number.
+*   **Impact:** Signing or processing an agreement with an unknown financial amount poses severe financial and legal liability. Lack of addresses makes legal recourse difficult.
+*   **Recommended Action:** **REJECT/HOLD.** Return the document to the originating business unit. Demand a complete contract copy with a clearly defined "Total Amount," full legal addresses, and tax registration numbers.
+
+---
+
+### **Document #3: Receipt / Transaction Document**
+*   **Risk Level:** 🟡 **MEDIUM**
+*   **Summary:** Likely a receipt or minor transaction document. It lacks a specified recipient and due date.
+*   **Identified Risks:**
+    *   Unclear counterparty (recipient field is unknown).
+    *   Missing physical addresses and tax details.
+    *   Missing due date.
+*   **Impact:** Without a recipient name, it is impossible to verify if this expense was authorized by or for the company. Missing due dates are common for receipts but require verification if processed as an invoice.
+*   **Recommended Action:** Route to the Accounts Payable (AP) helpdesk to match this receipt against employee expense reports or corporate card statements to identify the purchaser.
+
+---
+
+## RECOMMENDED SYSTEMIC ACTIONS
+
+1.  **Implement OCR/Extraction Validation Rules:** 
+    Configure the document ingestion system to automatically reject documents where the `Total Amount` or `Recipient Name` is extracted as "Unknown" or "Null."
+2.  **Vendor Master Data Matching:** 
+    For Document #1, cross-reference *Northwind Analytics Pvt Ltd* with the Vendor Master Database to automatically populate the missing Tax IDs and addresses if they are already on file.
+3.  **Strengthen PO-Matching Policy:** 
+    Enforce a "No PO, No Pay" policy. Automatically route invoices missing PO numbers (like Doc #1 and Doc #2) back to the sender with an automated request for PO generation.
+Jun 07, 2026 11:36:12 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Reading terminal → name=failureReport, unwrap=LLM[LLMChain], value=null
+
+=== Batch Document Extraction Report ===
+
+# BATCH DOCUMENT PROCESSING REPORT
+
+**Batch ID:** BATCH-2023-1024-A  
+**Date of Processing:** October 24, 2023  
+**Total Documents Processed:** 3  
+**Overall Batch Status:** ⚠️ **ATTENTION REQUIRED** (Contains High-Risk Documents)
+
+---
+
+## 🚨 IMMEDIATE ATTENTION: HIGH-RISK FLAGS
+The following document has been flagged as **HIGH RISK** and requires immediate manual intervention before any further processing, payment, or execution.
+
+### **Document #2: Unidentified Agreement / Contract**
+*   **Risk Level:** 🔴 **HIGH**
+*   **Primary Issues:** Unknown financial obligation, missing legal entity addresses, missing tax compliance data, and no PO number.
+*   **Immediate Action Required:** **HOLD PROCESSING.** Do not execute or approve payments. Route to the Legal and Procurement departments immediately to verify the contract value and counterparty details.
+
+---
+
+## OVERALL BATCH RISK SUMMARY
+
+| Document ID | Document Type (Est.) | Primary Parties | Risk Level | Key Issues |
+| :--- | :--- | :--- | :--- | :--- |
+| **Doc #1** | Invoice | Northwind Analytics Pvt Ltd $\
+ightarrow$ Acme Retail Operations | 🟡 **MEDIUM** | Missing PO, missing addresses, missing Tax ID. |
+| **Doc #2** | Contract / Agreement | Unknown | 🔴 **HIGH** | Unknown total amount, missing addresses, missing Tax ID, missing PO. |
+| **Doc #3** | Receipt / Invoice | Unknown Recipient | 🟡 **MEDIUM** | Unknown recipient, missing addresses, missing due date. |
+
+---
+
+## INDIVIDUAL DOCUMENT SUMMARIES & ANALYSIS
+
+### **Document #1: Invoice (Northwind Analytics to Acme Retail)**
+*   **Risk Level:** 🟡 **MEDIUM**
+*   **Summary:** An invoice issued by *Northwind Analytics Pvt Ltd* to *Acme Retail Operations*. While the parties are identified, the document lacks critical operational and tax metadata.
+*   **Identified Risks:**
+    *   Missing Purchase Order (PO) number.
+    *   Missing physical or billing addresses for both issuer and recipient.
+    *   Missing Tax ID / VAT / GST numbers.
+*   **Impact:** Lack of PO prevents automated 3-way matching, delaying payment workflows. Missing tax details pose a compliance risk for tax deductions/reporting.
+*   **Recommended Action:** Contact *Northwind Analytics* to request an updated invoice containing their Tax ID, physical address, and the correct Acme PO number.
+
+---
+
+### **Document #2: Contract / Agreement (Parties Unknown)**
+*   **Risk Level:** 🔴 **HIGH**
+*   **Summary:** A contract or agreement where the total financial obligation is completely unknown, and legal entity details are missing.
+*   **Identified Risks:**
+    *   **Total contract amount is "Unknown"** (unclear financial liability).
+    *   Missing physical addresses for both parties (invalidates legal jurisdiction/validation).
+    *   Missing tax details (high compliance and audit risk).
+    *   No associated PO number.
+*   **Impact:** Signing or processing an agreement with an unknown financial amount poses severe financial and legal liability. Lack of addresses makes legal recourse difficult.
+*   **Recommended Action:** **REJECT/HOLD.** Return the document to the originating business unit. Demand a complete contract copy with a clearly defined "Total Amount," full legal addresses, and tax registration numbers.
+
+---
+
+### **Document #3: Receipt / Transaction Document**
+*   **Risk Level:** 🟡 **MEDIUM**
+*   **Summary:** Likely a receipt or minor transaction document. It lacks a specified recipient and due date.
+*   **Identified Risks:**
+    *   Unclear counterparty (recipient field is unknown).
+    *   Missing physical addresses and tax details.
+    *   Missing due date.
+*   **Impact:** Without a recipient name, it is impossible to verify if this expense was authorized by or for the company. Missing due dates are common for receipts but require verification if processed as an invoice.
+*   **Recommended Action:** Route to the Accounts Payable (AP) helpdesk to match this receipt against employee expense reports or corporate card statements to identify the purchaser.
+
+---
+
+## RECOMMENDED SYSTEMIC ACTIONS
+
+1.  **Implement OCR/Extraction Validation Rules:** 
+    Configure the document ingestion system to automatically reject documents where the `Total Amount` or `Recipient Name` is extracted as "Unknown" or "Null."
+2.  **Vendor Master Data Matching:** 
+    For Document #1, cross-reference *Northwind Analytics Pvt Ltd* with the Vendor Master Database to automatically populate the missing Tax IDs and addresses if they are already on file.
+3.  **Strengthen PO-Matching Policy:** 
+    Enforce a "No PO, No Pay" policy. Automatically route invoices missing PO numbers (like Doc #1 and Doc #2) back to the sender with an automated request for PO generation.
