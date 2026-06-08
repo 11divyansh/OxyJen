@@ -1,0 +1,296 @@
+D:\OxyJen-v0.1\oxyjen-core>mvn exec:java -Dexec.mainClass="examples.DocumentExtractionExample"
+[INFO] Scanning for projects...
+[INFO]
+[INFO] -----------------------< io.oxyjen:oxyjen-core >------------------------
+[INFO] Building OxyJen 0.5.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- exec:3.6.3:java (default-cli) @ oxyjen-core ---
+Jun 07, 2026 11:22:37 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: start
+Jun 07, 2026 11:22:37 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: start
+Jun 07, 2026 11:22:37 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: classifyPrompt
+Jun 07, 2026 11:22:37 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: classifyPrompt
+Jun 07, 2026 11:22:37 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: classify
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: classify
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: branch
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.branching.BranchNode process
+INFO: [BranchNode:branch] -> invoice
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: branch
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: invoicePrompt
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: invoicePrompt
+Jun 07, 2026 11:22:42 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: extractInvoice
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: extractInvoice
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: analysisFanout
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.branching.RouterNode process
+INFO: [RouterNode:analysisFanout] Route fired: summary
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.branching.RouterNode process
+INFO: [RouterNode:analysisFanout] Route fired: risk
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.branching.RouterNode process
+INFO: [RouterNode:analysisFanout] Route fired: actions
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: analysisFanout
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: summaryPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: actionsPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: riskPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: actionsPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: riskPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: localChecks
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.concurrency.ParallelNode process
+INFO: [ParallelNode:localChecks] Starting 3 tasks
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: summaryPrompt
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: risk
+[LLMChain] Attempt 1 with TimedChatModel
+Jun 07, 2026 11:22:48 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: actions
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: risk
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [DEBUG] Contribute called for: risk → merge
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [MergeNode:merge] Received SUCCESS from: risk (1/4 arrived)
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: summary
+[LLMChain] Attempt 1 with TimedChatModel
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.concurrency.ParallelNode process
+INFO: [ParallelNode:localChecks] Done. success=3 failures=0 cancelled=0
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: localChecks
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: merge
+Jun 07, 2026 11:22:54 PM io.oxyjen.graph.branching.MergeNode process
+INFO: [MergeNode:merge] Waiting for 4 contributions: [summary, risk, actions, gatherChecks]
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: actions
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [DEBUG] Contribute called for: actions → merge
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [MergeNode:merge] Received SUCCESS from: actions (2/4 arrived)
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: gatherChecks
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherChecks] Collected 3 items from 1 source(s) using mode=SUCCESS_ONLY
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.concurrency.GatherNode process
+INFO: [GatherNode:gatherChecks] After filter/sort/limit: 3 items. Dropped: 0, processingTimeMs=28
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: gatherChecks
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [DEBUG] Contribute called for: gatherChecks → merge
+Jun 07, 2026 11:22:55 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [MergeNode:merge] Received SUCCESS from: gatherChecks (3/4 arrived)
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: summary
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [DEBUG] Contribute called for: summary → merge
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.branching.MergeNode contribute
+INFO: [MergeNode:merge] Received SUCCESS from: summary (4/4 arrived)
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.branching.MergeNode process
+INFO: [MergeNode:merge] All contributions received - merging.success=4, errors=0
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.branching.MergeNode process
+INFO: [MergeNode] Strategy = COLLECT_ALL
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.branching.MergeNode process
+INFO: [MergeNode:merge] Merged result = {summary=**Operational Summary**
+
+*   **Document Type:** Invoice (No. INV-2026-0417)
+*   **Parties:** Issued by **Northwind Analytics Pvt Ltd** (Issuer) to **Acme Retail Operations** (Recipient).
+*   **Amount:** USD 2,000
+*   **Due Date:** June 6, 2026 (issued on May 22, 2026)
+*   **Key Obligations:** 
+    *   The recipient must remit the full payment of **USD 2,000** within 15 days of the invoice date.
+    *   Payment must be made via **bank transfer**.
+    *   The recipient must include the invoice number (**INV-2026-0417**) in the payment reference., gatherChecks=GatherResult{collected=3, filtered=0, kept=3, processingTimeMs=28, sources=1}, risk=RiskAssessment[riskLevel=MEDIUM, risks=[Potential payment processing delay due to missing Purchase Order (PO) number, Compliance or tax audit risk due to missing vendor and billing addresses, Unclear tax application due to missing tax amount], reasons=[The invoice is missing a Purchase Order (PO) number, which is often required for automated matching and internal approvals., Both vendor address and billing address are missing, which may violate local invoicing compliance standards., Tax amount is not specified, which could lead to accounting discrepancies.]], actions=ActionPlan[nextActions=[Route the invoice to the procurement/operations team to manually identify and link the correct Purchase Order (PO) number., Contact Northwind Analytics Pvt Ltd to request an updated invoice containing their vendor address, billing address, and tax breakdown., File the invoice in the accounting system under 'Northwind Analytics Pvt Ltd' with Invoice No: INV-2026-0417., Upon successful verification and approval, schedule a bank transfer of USD 2,000 to be executed before the due date of 2026-06-06., Ensure the payment reference is explicitly set to 'INV-2026-0417' during the bank transfer initiation., Set a follow-up reminder for 2026-06-04 to confirm the payment has been processed and settled.], humanReviewReasons=[Missing Purchase Order (PO) number, which is required for standard three-way matching., Missing vendor address and billing address on the invoice document., Missing tax amount details, requiring verification of tax applicability before payment approval.]]}
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: merge
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: finalReportPrompt
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: finalReportPrompt
+Jun 07, 2026 11:22:59 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Executing: finalReport
+[LLMChain] Attempt 1 with TimedChatModel
+[LLMChain] Success with TimedChatModel
+Jun 07, 2026 11:23:09 PM io.oxyjen.graph.ParallelExecutor lambda$2
+INFO: [DAG] Completed: finalReport
+Jun 07, 2026 11:23:09 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Terminal nodes: [finalReport (unwrap=LLM[LLMChain]), failureReport (unwrap=LLM[LLMChain])]
+Jun 07, 2026 11:23:09 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] nodeOutputs keys: [summary, finalReport, classify, classifyPrompt, start, extractInvoice, analysisFanout, branch, localChecks, finalReportPrompt, actionsPrompt, riskPrompt, gatherChecks, merge, risk, summaryPrompt, actions, invoicePrompt]
+Jun 07, 2026 11:23:09 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Reading terminal → name=finalReport, unwrap=LLM[LLMChain], value=# Document Extraction Report: Invoice INV-2026-0417
+
+## 1. Operational Summary
+*   **Document Type:** Invoice
+*   **Invoice Number:** INV-2026-0417
+*   **Issuer (Vendor):** Northwind Analytics Pvt Ltd
+*   **Recipient:** Acme Retail Operations
+*   **Invoice Date:** May 22, 2026
+*   **Due Date:** June 6, 2026 (Net 15 days)
+*   **Total Amount:** USD 2,000
+*   **Key Obligations:** 
+    *   The recipient must remit the full payment of **USD 2,000** within 15 days of the invoice date.
+    *   Payment must be made via **bank transfer**.
+    *   The recipient must include the invoice number (**INV-2026-0417**) in the payment reference.
+
+---
+
+## 2. Extracted Fields
+| Field Name | Extracted Value |
+| :--- | :--- |
+| **Document Type** | Invoice |
+| **Invoice Number** | INV-2026-0417 |
+| **Issuer** | Northwind Analytics Pvt Ltd |
+| **Recipient** | Acme Retail Operations |
+| **Issue Date** | May 22, 2026 |
+| **Due Date** | June 6, 2026 |
+| **Amount** | USD 2,000 |
+| **Payment Method** | Bank Transfer |
+| **Payment Reference Required** | INV-2026-0417 |
+
+---
+
+## 3. Risk Assessment
+*   **Overall Risk Level:** **MEDIUM**
+
+### Identified Risks & Reasons:
+1.  **Potential Payment Processing Delay:** The invoice is missing a Purchase Order (PO) number, which is typically required for automated matching and internal approvals.
+2.  **Compliance or Tax Audit Risk:** Both the vendor address and billing address are missing from the document, which may violate local invoicing compliance standards.
+3.  **Unclear Tax Application:** The tax amount is not specified on the invoice, which could lead to accounting discrepancies.
+
+---
+
+## 4. Local Deterministic Checks
+*   **Checks Collected:** 3
+*   **Checks Kept/Passed:** 3
+*   **Checks Filtered:** 0
+*   **Processing Time:** 28 ms
+*   **Sources Evaluated:** 1
+
+### Human Review Triggers (Flagged by Checks):
+*   **Missing Purchase Order (PO) Number:** Flagged because a PO is required for standard three-way matching.
+*   **Missing Addresses:** Flagged due to the absence of both the vendor address and billing address on the invoice document.
+*   **Missing Tax Details:** Flagged because tax amount details are missing, requiring verification of tax applicability before payment approval.
+
+---
+
+## 5. Recommended Actions
+The following action plan is recommended for the operations team:
+
+1.  **PO Association:** Route the invoice to the procurement/operations team to manually identify and link the correct Purchase Order (PO) number.
+2.  **Vendor Contact:** Contact Northwind Analytics Pvt Ltd to request an updated invoice containing their vendor address, billing address, and tax breakdown.
+3.  **System Filing:** File the invoice in the accounting system under 'Northwind Analytics Pvt Ltd' with Invoice No: INV-2026-0417.
+4.  **Payment Scheduling:** Upon successful verification and approval, schedule a bank transfer of USD 2,000 to be executed before the due date of June 6, 2026.
+5.  **Reference Matching:** Ensure the payment reference is explicitly set to 'INV-2026-0417' during the bank transfer initiation.
+6.  **Follow-up:** Set a follow-up reminder for June 4, 2026, to confirm the payment has been processed and settled.
+
+---
+
+## 6. Extraction Errors
+*   **Errors Encountered:** None. The document extraction completed successfully with zero errors.
+Jun 07, 2026 11:23:09 PM io.oxyjen.graph.ParallelExecutor run
+INFO: [DEBUG] Reading terminal → name=failureReport, unwrap=LLM[LLMChain], value=null
+
+=== Document Extraction Report ===
+
+# Document Extraction Report: Invoice INV-2026-0417
+
+## 1. Operational Summary
+*   **Document Type:** Invoice
+*   **Invoice Number:** INV-2026-0417
+*   **Issuer (Vendor):** Northwind Analytics Pvt Ltd
+*   **Recipient:** Acme Retail Operations
+*   **Invoice Date:** May 22, 2026
+*   **Due Date:** June 6, 2026 (Net 15 days)
+*   **Total Amount:** USD 2,000
+*   **Key Obligations:** 
+    *   The recipient must remit the full payment of **USD 2,000** within 15 days of the invoice date.
+    *   Payment must be made via **bank transfer**.
+    *   The recipient must include the invoice number (**INV-2026-0417**) in the payment reference.
+
+---
+
+## 2. Extracted Fields
+| Field Name | Extracted Value |
+| :--- | :--- |
+| **Document Type** | Invoice |
+| **Invoice Number** | INV-2026-0417 |
+| **Issuer** | Northwind Analytics Pvt Ltd |
+| **Recipient** | Acme Retail Operations |
+| **Issue Date** | May 22, 2026 |
+| **Due Date** | June 6, 2026 |
+| **Amount** | USD 2,000 |
+| **Payment Method** | Bank Transfer |
+| **Payment Reference Required** | INV-2026-0417 |
+
+---
+
+## 3. Risk Assessment
+*   **Overall Risk Level:** **MEDIUM**
+
+### Identified Risks & Reasons:
+1.  **Potential Payment Processing Delay:** The invoice is missing a Purchase Order (PO) number, which is typically required for automated matching and internal approvals.
+2.  **Compliance or Tax Audit Risk:** Both the vendor address and billing address are missing from the document, which may violate local invoicing compliance standards.
+3.  **Unclear Tax Application:** The tax amount is not specified on the invoice, which could lead to accounting discrepancies.
+
+---
+
+## 4. Local Deterministic Checks
+*   **Checks Collected:** 3
+*   **Checks Kept/Passed:** 3
+*   **Checks Filtered:** 0
+*   **Processing Time:** 28 ms
+*   **Sources Evaluated:** 1
+
+### Human Review Triggers (Flagged by Checks):
+*   **Missing Purchase Order (PO) Number:** Flagged because a PO is required for standard three-way matching.
+*   **Missing Addresses:** Flagged due to the absence of both the vendor address and billing address on the invoice document.
+*   **Missing Tax Details:** Flagged because tax amount details are missing, requiring verification of tax applicability before payment approval.
+
+---
+
+## 5. Recommended Actions
+The following action plan is recommended for the operations team:
+
+1.  **PO Association:** Route the invoice to the procurement/operations team to manually identify and link the correct Purchase Order (PO) number.
+2.  **Vendor Contact:** Contact Northwind Analytics Pvt Ltd to request an updated invoice containing their vendor address, billing address, and tax breakdown.
+3.  **System Filing:** File the invoice in the accounting system under 'Northwind Analytics Pvt Ltd' with Invoice No: INV-2026-0417.
+4.  **Payment Scheduling:** Upon successful verification and approval, schedule a bank transfer of USD 2,000 to be executed before the due date of June 6, 2026.
+5.  **Reference Matching:** Ensure the payment reference is explicitly set to 'INV-2026-0417' during the bank transfer initiation.
+6.  **Follow-up:** Set a follow-up reminder for June 4, 2026, to confirm the payment has been processed and settled.
+
+---
+
+## 6. Extraction Errors
+*   **Errors Encountered:** None. The document extraction completed successfully with zero errors.
+
+=== Failure Report ===
+
+null
