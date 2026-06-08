@@ -1,4 +1,4 @@
 build:
+  jdk: 17
   commands:
-    - cd oxyjen-core
-    - mvn clean install
+    - mvn -f oxyjen-core/pom.xml clean install -DskipTests
