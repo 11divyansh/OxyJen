@@ -277,7 +277,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - Focus on **performance, security, and observability**.
 - I'm building this to learn java in a much deeper way.
 
-### **Phase 5 in progress**
+### **Phase 6 in progress**
 - **RAG support** - Vector databases, embeddings, document loaders
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
