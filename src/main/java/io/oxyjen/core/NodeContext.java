@@ -2,8 +2,10 @@ package io.oxyjen.core;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
@@ -33,10 +35,93 @@ public class NodeContext {
     // lock-free gather slots - one queue per slot
     private final ConcurrentMap<String, ConcurrentLinkedQueue<Object>> gatherSlots = new ConcurrentHashMap<>();
     
+    private final NodeContext parent;
+    private final String childName;
+    private final String traceId;
+    
+    // Root Constructor
+    public NodeContext() {
+    	this.parent = null;
+    	this.childName = null;
+    	this.traceId = generateTraceId();
+    }
+    
+    private NodeContext(NodeContext parent, String childName) {
+        this.parent = parent;
+        this.childName = childName;
+        // inherit traceId from parent, append child name for isolation
+        this.traceId = parent.traceId + "/" + childName + "-" + UUID.randomUUID().toString().substring(0, 8);;
+        // inherit runtime - child uses same executor/limiter
+        this.runtime = parent.runtime;
+        // inherit logger - logs flow to same destination
+        this.oxyjenLogger = parent.oxyjenLogger;
+        // inherit exception handler
+        this.exceptionHandler = parent.exceptionHandler;
+        // inherit graphName metadata
+        this.metadata.put("graphName", parent.getMetadata("graphName"));
+        this.metadata.put("traceId", this.traceId);
+        this.metadata.put("parentNode", childName);
+        // memories are ISOLATED, fresh for each child
+        // data is ISOLATED, writes don't pollute parent
+        // gatherSlots are SHARED via parent reference
+    }
+    
+    /**
+     * Creates an isolated child context for sub-executions.
+     *
+     * Use inside MapNode lambdas, RetryNode attempts, RecursiveNode iterations
+     * anywhere a sub-execution needs isolation from the parent graph context.
+     *
+     * What child inherits (shared references):
+     * - ExecutionRuntime (same executor, limiter, failure mode)
+     * - Logger and OxyLogger (logs flow to same destination)
+     * - ExceptionHandler
+     * - graphName metadata
+     * - traceId (extended with child name for sub-execution identity)
+     * - gatherSlots (shared so sub-executions can accumulate to parent)
+     *
+     * What child isolates (own copies):
+     * - data map (writes don't affect parent or siblings)
+     * - metadata map (except inherited keys above)
+     * - memories (fresh scopes per child)
+     *
+     * @param childName identifier for this child - used in traceId and logs
+     * @return isolated child NodeContext
+     */
+    public NodeContext child(String childName) {
+        Objects.requireNonNull(childName, "childName must not be null");
+        return new NodeContext(this, childName);
+    }
+    
+    /**
+     * Returns the trace ID for this context.
+     * Root: "abc123"
+     * Child: "abc123/element-0"
+     * Nested: "abc123/element-0/retry-2"
+     */
+    public String getTraceId() {
+        return traceId;
+    }
+
+    /**
+     * Returns the parent context, or null if this is a root context.
+     */
+    public NodeContext getParent() {
+        return parent;
+    }
+
+    /**
+     * Returns true if this is a child context.
+     */
+    public boolean isChild() {
+        return parent != null;
+    }
+    
     /** Each slot is lock-free {@link ConcurrentLinkedQueue} - parallel branches
      *  accumulate concurrently with no contention across different slots.
      **/
     public ConcurrentMap<String, ConcurrentLinkedQueue<Object>> getGatherSlots() {
+    	if (parent != null) return parent.getGatherSlots();
     	return gatherSlots;
     }
     // to do context.gatherSlot(slotName).add(value);
@@ -61,6 +146,10 @@ public class NodeContext {
      * Should not be called by user code.
      */
     public void setRuntime(ExecutionRuntime runtime) {
+    	if (parent != null) throw new IllegalStateException(
+                "Cannot set runtime on a child context. " +
+                "Runtime is inherited from parent."
+            );
     	if (this.runtime != null) {
             throw new IllegalStateException("Runtime already set.");
         }
@@ -86,7 +175,11 @@ public class NodeContext {
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        return (T) data.get(key);
+    	Object value = data.get(key);
+    	if (value != null) return (T) value;
+    	// fall back to parent for reads, child can read parent's data
+    	if (parent != null) return parent.get(key);
+        return null;
     }
     /**
      * Retrieves an Optional containing the value if the key exists.
@@ -94,8 +187,8 @@ public class NodeContext {
      */
     public <T> Optional<T> get(String key, Class<T> type) {
     	Object value = data.get(key);
+    	if (value == null && parent != null) value = parent.data.get(key);
     	if (value == null) return Optional.empty();
-    	
     	if (!type.isInstance(value))
     		throw new IllegalStateException(
     			"Value for key '" + key + "' is not of type " + type.getSimpleName()
@@ -107,7 +200,12 @@ public class NodeContext {
      * Checks if a key exists in the shared data.
      */
     public boolean contains(String key) {
-        return data.containsKey(key);
+        return data.containsKey(key) || (parent != null && parent.contains(key));
+    }
+    
+    // traceId generation
+    private static String generateTraceId() {
+    	return UUID.randomUUID().toString();
     }
 
     /**
@@ -185,7 +283,10 @@ public class NodeContext {
      */
     @SuppressWarnings("unchecked")
     public <T> T getMetadata(String key) {
-        return (T) metadata.get(key);
+    	Object value = metadata.get(key);
+    	if (value != null) return (T) value;
+    	if (parent != null) return parent.getMetadata(key);
+        return null;
     }
     
     /**
