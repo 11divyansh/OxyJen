@@ -11,10 +11,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
@@ -195,7 +195,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
     }
  
     private final String name;
-    private final Function<I, O> mapFn;
+    private final BiFunction<I, NodeContext, O> mapFn;
     private final long globalTimeoutMs;
     private final boolean continueOnError;
     private final long completionPollTimeoutMs;
@@ -204,7 +204,7 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
  
     private MapNode(
             String name,
-            Function<I, O> mapFn,
+            BiFunction<I, NodeContext, O> mapFn,
             long globalTimeoutMs,
             long completionPollTimeoutMs,
             boolean continueOnError,
@@ -385,22 +385,21 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
             int index,
             List<I> elements,
             ExecutorCompletionService<IndexedResult<O>> ecs,
-            NodeContext context
+            NodeContext parentContext
     ) {
         final I element = elements.get(index);
- 
+        // Create isolated child context for this element
+        final NodeContext childContext = parentContext.child("element-" + index);
         try {
             return ecs.submit(() -> {
                 try {
-                    O output = mapFn.apply(element);
+                    O output = mapFn.apply(element, childContext);
                     return new IndexedResult<>(index, new Success<>(output));
                 } catch (Throwable t) {
-                    context.getLogger().warning(
+                    parentContext.getLogger().warning(
                         "[MapNode:" + name + "] Element[" + index + "] failed: " + t.getMessage()
                     );
-                    if (t instanceof VirtualMachineError vme) {
-                        throw vme;
-                    }
+                    if (t instanceof VirtualMachineError vme) throw vme;
                     return new IndexedResult<>(index, new Failure<>(t));
                 }
             });
@@ -485,8 +484,10 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
                 }
                 break;
             }
+        	// Create child context per element, same as parallel path
+            NodeContext childCtx = context.child("element-" + i);
             try {
-                results.add(new Success<>(mapFn.apply(elements.get(i))));
+                results.add(new Success<>(mapFn.apply(elements.get(i), childCtx)));
             } catch (Exception e) {
             	results.add(new Failure<>(e));
                 if (!continueOnError) {
@@ -506,15 +507,21 @@ public class MapNode<I, O> implements NodePlugin<Iterable<I>, MapNode.MapResult<
  
     public static final class Builder<I, O> {
  
-        private Function<I, O> mapFn;
+        private BiFunction<I, NodeContext, O> mapFn;
         private long globalTimeoutMs         = 60_000L;
         private long completionPollTimeoutMs = 0L;
         private boolean continueOnError      = false;
         private int maxInFlight              = 0;
         private long cancellationGraceMs 	 = 500L;
  
+        public Builder<I, O> mapWith(BiFunction<I, NodeContext, O> fn) {
+            this.mapFn = Objects.requireNonNull(fn);;
+            return this;
+        }
+        
         public Builder<I, O> mapWith(Function<I, O> fn) {
-            this.mapFn = Objects.requireNonNull(fn);
+        	Objects.requireNonNull(fn);
+            this.mapFn = (element, ctx) -> fn.apply(element);
             return this;
         }
  
