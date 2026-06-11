@@ -25,8 +25,7 @@ import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.FailureEdge;
 import io.oxyjen.graph.edges.RouteEdge;
 import io.oxyjen.graph.validation.DAGValidator;
-import io.oxyjen.llm.LLMNode;
-import io.oxyjen.llm.schema.SchemaNode;
+import io.oxyjen.llm.UsesRuntimeLimiter;
 
 public class ParallelExecutor {
 	
@@ -172,7 +171,7 @@ public class ParallelExecutor {
     ) {
     	Semaphore limiter = runtime.getLimiter();
     	NodePlugin<?, ?> unwrappedNode = node.unwrap();
-    	boolean isIO = unwrappedNode instanceof LLMNode || unwrappedNode instanceof SchemaNode;
+    	boolean isIO = unwrappedNode instanceof UsesRuntimeLimiter;
     	NodePlugin<Object, Object> actualNode = (NodePlugin<Object, Object>) unwrappedNode;
     	if (isIO) {
     		try {

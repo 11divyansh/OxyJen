@@ -6,6 +6,7 @@ import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.LLM;
+import io.oxyjen.llm.UsesRuntimeLimiter;
 import io.oxyjen.util.JsonMapper;
 import io.oxyjen.util.JsonParser;
 
@@ -14,7 +15,7 @@ import io.oxyjen.util.JsonParser;
  * 
  * Combines LLMNode with SchemaEnforcer for structured outputs.
  */
-public final class SchemaNode<T> implements NodePlugin<String, T> {
+public final class SchemaNode<T> implements NodePlugin<String, T>, UsesRuntimeLimiter {
     
     private final ChatModel model;
     private final JSONSchema schema;

@@ -25,6 +25,7 @@ import io.oxyjen.execution.result.Failure;
 import io.oxyjen.execution.result.NotExecuted;
 import io.oxyjen.execution.result.Success;
 import io.oxyjen.execution.result.TaskResult;
+import io.oxyjen.llm.UsesRuntimeLimiter;
 
 /**
  * Applies a processing function to every element of an input collection concurrently.

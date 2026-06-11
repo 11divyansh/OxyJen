@@ -26,7 +26,7 @@ import io.oxyjen.core.NodePlugin;
  *     .build();
  * </pre>
  */
-public final class LLMNode implements NodePlugin<String, String> {
+public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLimiter {
     
     private final ChatModel model;
     private final String memoryName;
