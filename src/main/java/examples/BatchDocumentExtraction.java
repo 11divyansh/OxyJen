@@ -113,13 +113,13 @@ public class BatchDocumentExtraction {
 		
 	    // MapNode: same extraction function is applied to every document concurrently.
 	    MapNode<String, DocumentExtraction> batchExtractor = MapNode.<String, DocumentExtraction>builder()
-	            .mapWith((documentText, ctx) -> {
+	            .mapWith(documentText -> {
 	                // The lambda is the batch work unit: build a prompt, call the extractor,
 	                // and return one structured extraction per input document.
 	                String prompt = "Extract structured fields from this document.\n" +
 	                        "Use \"unknown\" for absent fields. Use [] for absent lists.\n\n" +
 	                        "Document:\n" + documentText;
-	                return extractor.process(prompt, ctx);
+	                return extractor.process(prompt, new NodeContext());
 	            })
 	            .timeout(180, TimeUnit.SECONDS)
 	            .maxInFlight(3)
@@ -134,7 +134,7 @@ public class BatchDocumentExtraction {
 
 	    // Second batch pass: every extracted document is scored for operational risk.
 	    MapNode<DocumentExtraction, RiskAssessment> batchRisk = MapNode.<DocumentExtraction, RiskAssessment>builder()
-	            .mapWith((extraction, ctx) -> {
+	            .mapWith(extraction -> {
 	                String prompt = """
 	                		Assess this extracted document for operational risk.
 	                		riskLevel must be LOW, MEDIUM, or HIGH.
@@ -144,7 +144,7 @@ public class BatchDocumentExtraction {
                     
 	                		Extraction:
 	                		""" + extraction;
-	                return riskNode.process(prompt, ctx);
+	                return riskNode.process(prompt, new NodeContext());
 	            })
 	            .timeout(180, TimeUnit.SECONDS)
 	            .maxInFlight(3)

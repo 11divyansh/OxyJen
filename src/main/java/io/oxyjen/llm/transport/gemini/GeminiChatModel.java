@@ -3,6 +3,7 @@ package io.oxyjen.llm.transport.gemini;
 import java.time.Duration;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.internal.RateLimitedChatModel;
 import io.oxyjen.llm.models.ChatRequest;
 import io.oxyjen.llm.models.ChatResponse;
 import io.oxyjen.llm.models.TokenUsage;
@@ -32,7 +33,9 @@ public final class GeminiChatModel implements ChatModel {
     // Configuration (optional, can be null)
     private Double temperature;
     private Integer maxTokens;
+    private Integer rateLimit;
     
+    private volatile ChatModel rateLimitedDelegate;
     // Last call metadata (for cost tracking, debugging)
     private TokenUsage lastUsage;
 
@@ -51,9 +54,28 @@ public final class GeminiChatModel implements ChatModel {
         this.client = new GeminiClient(apiKey, requestTimeout);
         this.model = model;
     }
+    
+    // copy constructor, creates GeminiChatModel without rateLimit
+    // so RateLimitedChatModel wraps a clean delegate
+    private GeminiChatModel(GeminiChatModel source) {
+        this.client = source.client;
+        this.model = source.model;
+        this.temperature = source.temperature;
+        this.maxTokens = source.maxTokens;
+    }
 
     @Override
     public String chat(String input) {
+    	if (rateLimit != null) {
+            if (rateLimitedDelegate == null) {
+                synchronized(this) {
+                    if (rateLimitedDelegate == null) {
+                        rateLimitedDelegate = RateLimitedChatModel.of(new GeminiChatModel(this), rateLimit);
+                    }
+                }
+            }
+            return rateLimitedDelegate.chat(input);
+        }
         ChatRequest.Builder requestBuilder = ChatRequest.builder()
             .model(model)
             .addMessage("user", input);
@@ -77,6 +99,12 @@ public final class GeminiChatModel implements ChatModel {
      */
     public GeminiChatModel withMaxTokens(int tokens) {
         this.maxTokens = tokens;
+        return this;
+    }
+    
+    public GeminiChatModel withRateLimit(int requestsPerMinute) {
+        this.rateLimit = requestsPerMinute;
+        this.rateLimitedDelegate = null;  // invalidate cache
         return this;
     }
 
