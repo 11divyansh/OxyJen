@@ -108,8 +108,7 @@ public final class LLMChain implements ChatModel {
        // Retry on transient errors only
        String message = e.getMessage();
        if (message == null) return false;
-       
-       if (e instanceof InvalidAPIKeyException) return false;
+
        return e instanceof RateLimitException ||
               e instanceof NetworkException ||
               e instanceof TimeoutException ;

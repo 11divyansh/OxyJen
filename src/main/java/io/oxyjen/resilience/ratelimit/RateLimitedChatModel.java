@@ -1,4 +1,4 @@
-package io.oxyjen.llm.internal;
+package io.oxyjen.resilience.ratelimit;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
