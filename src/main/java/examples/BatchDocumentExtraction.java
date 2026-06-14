@@ -29,6 +29,7 @@ import io.oxyjen.llm.prompts.Variable;
 import io.oxyjen.llm.schema.SchemaGenerator;
 import io.oxyjen.llm.schema.SchemaNode;
 import io.oxyjen.llm.transport.gemini.GeminiChatModel;
+import io.oxyjen.resilience.ratelimit.RateLimiters;
 
 public class BatchDocumentExtraction {
 
@@ -198,7 +199,7 @@ public class BatchDocumentExtraction {
 	public static ChatModel geminiModel(String apiKey, String modelName) {
 		ChatModel model = LLM.gemini(modelName, apiKey);
 		if(model instanceof GeminiChatModel gemini) {
-			return gemini.withTemperature(0.0).withMaxTokens(4096);
+			return gemini.withTemperature(0.0).withMaxTokens(4096).withRateLimiter(RateLimiters.geminiFreeTier());
 		}
 		return model;
 	}

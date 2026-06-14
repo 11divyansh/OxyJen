@@ -36,8 +36,4 @@ public interface RateLimiter {
             };
         }
     }
-    
-    public static RateLimiter geminiFreeTier() {
-        return new FixedIntervalRateLimiter(4); // conservative buffer under 5
-    }
 }

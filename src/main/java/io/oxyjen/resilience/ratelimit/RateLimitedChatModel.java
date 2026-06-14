@@ -1,9 +1,9 @@
 package io.oxyjen.resilience.ratelimit;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.transport.gemini.GeminiChatModel;
 
 /**
  * Internal rate limiting wrapper for ChatModel.
@@ -13,40 +13,26 @@ import io.oxyjen.llm.ChatModel;
 public final class RateLimitedChatModel implements ChatModel {
 
     private final ChatModel delegate;
-    private final long intervalMs;
-    private final AtomicLong lastCallTime = new AtomicLong(0);
-    private final Object lock = new Object();
+    private final RateLimiter rateLimiter;
 
-    RateLimitedChatModel(ChatModel delegate, int requestsPerMinute) {
-        if (requestsPerMinute <= 0)
-            throw new IllegalArgumentException("requestsPerMinute must be > 0");
+    RateLimitedChatModel(ChatModel delegate, RateLimiter rateLimiter) {
         this.delegate = Objects.requireNonNull(delegate);
-        this.intervalMs = 60_000L / requestsPerMinute;
+        this.rateLimiter = Objects.requireNonNull(rateLimiter);
     }
 
     @Override
     public String chat(String input) {
-        throttle();
+    	try {
+    		rateLimiter.acquire();
+    	} catch (InterruptedException e) {
+    		Thread.currentThread().interrupt();
+    		throw new RuntimeException("Interrupted waiting for rate limit token", e);
+    	}
         return delegate.chat(input);
     }
 
-    private void throttle() {
-        synchronized (lock) {
-            long now = System.currentTimeMillis();
-            long elapsed = now - lastCallTime.get();
-            if (elapsed < intervalMs) {
-                try {
-                    Thread.sleep(intervalMs - elapsed);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            lastCallTime.set(System.currentTimeMillis());
-        }
-    }
-
     // only LLM factory uses this
-    public static RateLimitedChatModel of(ChatModel model, int rpm) {
-        return new RateLimitedChatModel(model, rpm);
+    public static RateLimitedChatModel of(ChatModel model, RateLimiter limiter) {
+        return new RateLimitedChatModel(model, limiter);
     }
 }

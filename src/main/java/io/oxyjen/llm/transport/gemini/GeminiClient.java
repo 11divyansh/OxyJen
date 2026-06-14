@@ -207,8 +207,9 @@ public final class GeminiClient {
                 "Available: gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro"
             );
             case 429 -> new RateLimitException(
-                "Gemini rate limit exceeded. " +
-                "Free tier: 15 RPM, 1M TPM. Consider upgrading or adding delays."
+                "Gemini rate limit exceeded. " + "\n" +
+                		response.headers() + "\n" +
+                		response.body()
             );
             case 500, 502, 503 -> new NetworkException(
                 "Gemini server error (" + status + "). Try again later.", null
