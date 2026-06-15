@@ -3,7 +3,6 @@ package io.oxyjen.resilience.ratelimit;
 import java.util.Objects;
 
 import io.oxyjen.llm.ChatModel;
-import io.oxyjen.llm.transport.gemini.GeminiChatModel;
 
 /**
  * Internal rate limiting wrapper for ChatModel.

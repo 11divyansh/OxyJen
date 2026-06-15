@@ -120,14 +120,18 @@ public final class LLMChain implements ChatModel {
    }
    
    private long calculateBackoff(int attempt, Exception lastException) {
-	    // Rate limit needs much longer wait — at least 30s
-	    if (lastException instanceof RateLimitException) {
-	        long seconds = 30L * attempt; // 30s, 60s, 90s
-	        Duration base = Duration.ofSeconds(seconds);
-	        if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
-	            base = maxBackoff;
-	        }
-	        return base.toMillis();
+	    if (lastException instanceof RateLimitException rle) {
+	    	if (rle.getRetryAfterMs() > 0) {
+	    		long retryMs = rle.getRetryAfterMs() + 1000; //+1s buffer
+	    		return retryMs;
+	    	}
+	    	// Rate limit needs much longer wait — at least 30s
+	    	long seconds = 30L * attempt; // 30s, 60s, 90s
+	    	Duration base = Duration.ofSeconds(seconds);
+	    	if (maxBackoff != null && base.compareTo(maxBackoff) > 0) {
+	    		base = maxBackoff;
+	    	}
+	    	return base.toMillis();
 	    }	
 	    // 1. Calculate base delay
 	    Duration base;

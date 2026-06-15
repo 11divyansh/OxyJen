@@ -36,14 +36,6 @@ public final class GeminiChatModel implements ChatModel {
     private Double temperature;
     private Integer maxTokens;
     
-    /**
-     * No rate limiter by default.
-     * Free tier users should call withRateLimit(4) or withRateLimiter(RateLimiters.geminiFreeTier())
-     * LLMChain handles occasional 429s via retry + backoff as fallback.
-     */
-    private RateLimiter rateLimiter = null; //opt-in, not default
-    private volatile ChatModel rateLimitedDelegate;
-    
     // Last call metadata (for cost tracking, debugging)
     private TokenUsage lastUsage;
     
@@ -62,28 +54,9 @@ public final class GeminiChatModel implements ChatModel {
         this.client = new GeminiClient(apiKey, requestTimeout);
         this.model = model;
     }
-    
-    // copy constructor, creates GeminiChatModel without rateLimit
-    // so RateLimitedChatModel wraps a clean delegate
-    private GeminiChatModel(GeminiChatModel source) {
-        this.client = source.client;
-        this.model = source.model;
-        this.temperature = source.temperature;
-        this.maxTokens = source.maxTokens;
-    }
 
     @Override
     public String chat(String input) {
-    	if (rateLimiter != null) {
-            if (rateLimitedDelegate == null) {
-                synchronized(this) {
-                    if (rateLimitedDelegate == null) {
-                        rateLimitedDelegate = RateLimitedChatModel.of(new GeminiChatModel(this), rateLimiter);
-                    }
-                }
-            }
-            return rateLimitedDelegate.chat(input);
-        }
     	 ChatRequest.Builder requestBuilder = ChatRequest.builder()
     			 .model(model)
     			 .addMessage("user", input);
@@ -97,7 +70,6 @@ public final class GeminiChatModel implements ChatModel {
 
     public GeminiChatModel withTemperature(double temp) {
         this.temperature = temp;
-        this.rateLimitedDelegate = null;
         return this;
     }
 
@@ -106,31 +78,6 @@ public final class GeminiChatModel implements ChatModel {
      */
     public GeminiChatModel withMaxTokens(int tokens) {
         this.maxTokens = tokens;
-        this.rateLimitedDelegate = null;
-        return this;
-    }
-    
-    public GeminiChatModel withRateLimit(int requestsPerMinute) {
-        return withRateLimiter(RateLimiters.fixedInterval(requestsPerMinute));
-    }
-    
-    /**
-     * Set rate limiter with full control over algorithm.
-     *
-     * Examples:
-     * .withRateLimiter(RateLimiters.fixedInterval(12))
-     * .withRateLimiter(RateLimiters.tokenBucket(12))
-     * .withRateLimiter(RateLimiters.geminiFreeTier())
-     * .withRateLimiter(
-     *     RateLimiter.builder()
-     *         .requestsPerMinute(12)
-     *         .algorithm(Algorithm.SLIDING_WINDOW)
-     *         .build()
-     * )
-     */
-    public GeminiChatModel withRateLimiter(RateLimiter rateLimiter) {
-        this.rateLimiter = rateLimiter;
-        this.rateLimitedDelegate = null;
         return this;
     }
 

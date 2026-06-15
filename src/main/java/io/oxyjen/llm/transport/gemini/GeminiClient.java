@@ -206,11 +206,11 @@ public final class GeminiClient {
                 "Model '" + model + "' not found. " +
                 "Available: gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro"
             );
-            case 429 -> new RateLimitException(
-                "Gemini rate limit exceeded. " + "\n" +
-                		response.headers() + "\n" +
-                		response.body()
-            );
+            case 429 -> {
+            	long retryAfterMs = parseRetryDelay(response.body());
+            	yield new RateLimitException("Gemini rate limit exceeded. Consider upgrading or adding delays.", retryAfterMs);
+            }
+ 
             case 500, 502, 503 -> new NetworkException(
                 "Gemini server error (" + status + "). Try again later.", null
             );
@@ -218,6 +218,22 @@ public final class GeminiClient {
                 "Gemini request failed with status " + status + ": " + body
             );
         };
+    }
+    
+    private long parseRetryDelay(String body) {
+        try {
+            // find "retryDelay": "25.023430448s"
+            int idx = body.indexOf("retryDelay");
+            if (idx == -1) return 0;
+            
+            int start = body.indexOf('"', idx + 11) + 1; // skip to value
+            int end = body.indexOf('"', start);
+            String delay = body.substring(start, end); // "25.023430448s"
+            
+            double seconds = Double.parseDouble(delay.replace("s", ""));
+            return (long)(seconds * 1000);
+        } catch (Exception ignored) {}
+        return 0;
     }
 
     private String escapeJson(String str) {

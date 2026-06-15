@@ -189,9 +189,10 @@ public final class OpenAIClient {
             		"Model '" + model + "' does not exist. " +
             	    "Available models: " + String.join(", ", Models.getSupportedModels())
             );
-            case 429 -> new RateLimitException(
-                "Rate limit exceeded. Slow down or upgrade your plan."
-            );
+            case 429 -> {
+            	long retryAfterMs = parseRetryDelay(response.body());
+            	yield new RateLimitException("Rate limit exceeded. Slow down or upgrade your plan.", retryAfterMs);
+            }
             case 500, 502, 503 -> new NetworkException(
                  "OpenAI server error (" + status + "). Try again later.",
                  null
@@ -200,6 +201,22 @@ public final class OpenAIClient {
                  "OpenAI request failed with status " + status + ": " + body
             );
         };
+    }
+    
+    private long parseRetryDelay(String body) {
+        try {
+            // find "retryDelay": "25.023430448s"
+            int idx = body.indexOf("retryDelay");
+            if (idx == -1) return 0;
+            
+            int start = body.indexOf('"', idx + 11) + 1; // skip to value
+            int end = body.indexOf('"', start);
+            String delay = body.substring(start, end); // "25.023430448s"
+            
+            double seconds = Double.parseDouble(delay.replace("s", ""));
+            return (long)(seconds * 1000);
+        } catch (Exception ignored) {}
+        return 0;
     }
  
     private String escapeJson(String str) {

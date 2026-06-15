@@ -20,12 +20,7 @@ final class FixedIntervalRateLimiter implements RateLimiter {
             
             if (lastSlotTime.compareAndSet(last, next)) {
                 long sleepMs = next - now;
-                if (sleepMs > 0) {
-                    System.out.println("[RateLimiter] throttling for " + sleepMs + "ms");
-                    Thread.sleep(sleepMs);
-                } else {
-                    System.out.println("[RateLimiter] slot acquired immediately");
-                }
+                if (sleepMs > 0) Thread.sleep(sleepMs);
                 return;
             }
             Thread.onSpinWait(); // hint to CPU, reduces spin overhead

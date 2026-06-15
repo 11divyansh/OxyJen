@@ -6,7 +6,10 @@ package io.oxyjen.llm.exceptions;
  * backoff applies
  */
 public final class RateLimitException extends LLMException {
-    public RateLimitException(String message) {
+	private final long retryAfterMs; 
+    public RateLimitException(String message, long retryAfterMs) {
         super(message);
+        this.retryAfterMs =retryAfterMs;
     }
+    public long getRetryAfterMs() { return retryAfterMs;}
 }

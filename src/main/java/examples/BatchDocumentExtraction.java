@@ -199,7 +199,7 @@ public class BatchDocumentExtraction {
 	public static ChatModel geminiModel(String apiKey, String modelName) {
 		ChatModel model = LLM.gemini(modelName, apiKey);
 		if(model instanceof GeminiChatModel gemini) {
-			return gemini.withTemperature(0.0).withMaxTokens(4096).withRateLimiter(RateLimiters.geminiFreeTier());
+			return gemini.withTemperature(0.0).withMaxTokens(4096);
 		}
 		return model;
 	}

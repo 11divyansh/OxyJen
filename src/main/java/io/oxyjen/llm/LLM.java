@@ -3,6 +3,9 @@ import java.time.Duration;
 
 import io.oxyjen.llm.transport.gemini.GeminiModels;
 import io.oxyjen.llm.transport.openai.OpenAIModels;
+import io.oxyjen.resilience.ratelimit.RateLimitedChatModel;
+import io.oxyjen.resilience.ratelimit.RateLimiter;
+import io.oxyjen.resilience.ratelimit.RateLimiters;
 /**
  * Public entry point for Oxyjen LLM system.
  * 
@@ -83,6 +86,37 @@ public final class LLM {
      */
     public static LLMChain.Builder chain() {
         return LLMChain.builder();
+    }
+    
+    /**
+     * Wrap any ChatModel with rate limiting.
+     *
+     * Examples:
+     * ChatModel model = LLM.withRateLimit(
+     *     LLM.gemini(modelName, apiKey),
+     *     RateLimiters.geminiFreeTier()
+     * );
+     *
+     * ChatModel model = LLM.withRateLimit(
+     *     LLM.gemini(modelName, apiKey),
+     *     RateLimiter.builder()
+     *         .requestsPerMinute(12)
+     *         .algorithm(Algorithm.TOKEN_BUCKET)
+     *         .build()
+     * );
+     */
+    public static ChatModel withRateLimit(ChatModel model, RateLimiter rateLimiter) {
+        return RateLimitedChatModel.of(model, rateLimiter);
+    }
+
+    /**
+     * Shortcut - fixed interval rate limit.
+     */
+    public static ChatModel withRateLimit(ChatModel model, int requestsPerMinute) {
+        return RateLimitedChatModel.of(
+            model, 
+            RateLimiters.fixedInterval(requestsPerMinute)
+        );
     }
     
     /**
