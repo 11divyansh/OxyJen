@@ -1,6 +1,7 @@
 package io.oxyjen.llm.schema;
 
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
@@ -37,35 +38,64 @@ public final class SchemaNode<T> implements NodePlugin<String, T>, UsesRuntimeLi
     
     @Override
     public T process(String input, NodeContext context) {
+        Semaphore runtimeLimiter = acquireRuntimeLimiterIfNested(context);
         if (memoryKey != null) {
             context.memory(memoryKey).append("user", input);
         } 
-        SchemaResult result = enforcer.execute(input);
-        if (memoryKey != null) {
-            context.memory(memoryKey).append("assistant", result.getRawJson());
-        }
-        // Store schema result in context
-        context.setMetadata("schemaResult", result);
-        if (!result.isValid()) {
-        	// store errors for graph-level decisions
-        	context.setMetadata("schemaErrors", result.getErrors());
-            if (failOnInvalid) {
-                throw new IllegalStateException("Schema validation failed: " + result.getErrors());
-            }
-            return null; //soft-fail
-        }
         try {
-            if (targetType == Map.class) {
-                return targetType.cast(JsonParser.parse(result.getRawJson()));
-            } 
-            return JsonMapper.deserialize(result.getRawJson(), targetType);
-        } catch (Exception e) {
-        	// store deserialization error
-        	context.setMetadata("deserializationError", e.getMessage());
-            if (failOnInvalid) {
-                throw new RuntimeException("Deserialization failed", e);
+            SchemaResult result = enforcer.execute(input);
+            if (memoryKey != null) {
+                context.memory(memoryKey).append("assistant", result.getRawJson());
             }
-            return null; // soft-fail
+            // Store schema result in context
+            context.setMetadata("schemaResult", result);
+            if (!result.isValid()) {
+            	// store errors for graph-level decisions
+            	context.setMetadata("schemaErrors", result.getErrors());
+                if (failOnInvalid) {
+                    throw new IllegalStateException("Schema validation failed: " + result.getErrors());
+                }
+                return null; //soft-fail
+            }
+            try {
+                if (targetType == Map.class) {
+                    return targetType.cast(JsonParser.parse(result.getRawJson()));
+                } 
+                return JsonMapper.deserialize(result.getRawJson(), targetType);
+            } catch (Exception e) {
+            	// store deserialization error
+            	context.setMetadata("deserializationError", e.getMessage());
+                if (failOnInvalid) {
+                    throw new RuntimeException("Deserialization failed", e);
+                }
+                return null; // soft-fail
+            }
+        } finally {
+            releaseRuntimeLimiter(runtimeLimiter);
+        }
+    }
+
+    private Semaphore acquireRuntimeLimiterIfNested(NodeContext context) {
+        if (context == null || !context.isChild()) {
+            return null;
+        }
+        var runtime = context.getRuntime();
+        if (runtime == null) {
+            return null;
+        }
+        Semaphore limiter = runtime.getLimiter();
+        try {
+            limiter.acquire();
+            return limiter;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted waiting for runtime limiter", e);
+        }
+    }
+
+    private void releaseRuntimeLimiter(Semaphore limiter) {
+        if (limiter != null) {
+            limiter.release();
         }
     }
     

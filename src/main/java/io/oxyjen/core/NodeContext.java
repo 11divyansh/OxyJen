@@ -58,7 +58,10 @@ public class NodeContext {
         // inherit exception handler
         this.exceptionHandler = parent.exceptionHandler;
         // inherit graphName metadata
-        this.metadata.put("graphName", parent.getMetadata("graphName"));
+        Object graphName = parent.getMetadata("graphName");
+        if (graphName != null) {
+            this.metadata.put("graphName", graphName);
+        }
         this.metadata.put("traceId", this.traceId);
         this.metadata.put("parentNode", childName);
         // memories are ISOLATED, fresh for each child

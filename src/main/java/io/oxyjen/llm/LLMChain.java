@@ -10,6 +10,7 @@ import io.oxyjen.llm.exceptions.NetworkException;
 import io.oxyjen.llm.exceptions.RateLimitException;
 import io.oxyjen.llm.exceptions.TimeoutException;
 import io.oxyjen.llm.internal.TimedChatModel;
+import io.oxyjen.resilience.ratelimit.RateLimitedChatModel;
 
 /**
 * ChatModel with fallbacks and retries.
@@ -76,6 +77,7 @@ public final class LLMChain implements ChatModel {
        Exception lastException = null;
        
        for (ChatModel model : models) {
+    	   printDecoratorChain(model);
            for (int attempt = 1; attempt <= maxRetries; attempt++) {
                try {
                    log("Attempt " + attempt + " with " + modelName(model));                
@@ -84,11 +86,18 @@ public final class LLMChain implements ChatModel {
                    return response;                  
                } catch (Exception e) {
                    lastException = e;
-                   log("Failed: " + e.getMessage());
+                   String reason = classifyReason(e);
+                   log("Failed: " + e.getMessage() + " [reason=" + reason + "]");
                    
                    if (attempt < maxRetries && shouldRetry(e)) {
                        long backoffMs = calculateBackoff(attempt, lastException);
-                       log("Retrying in " + backoffMs + "ms...");
+                       if (e instanceof RateLimitException rle && rle.hasRetryAfter()) {
+                           log("Attempt " + (attempt + 1) + " reason=RateLimit retryAfter="
+                               + (rle.getRetryAfterMs() / 1000) + "s");
+                       } else {
+                           log("Attempt " + (attempt + 1) + " reason=" + reason
+                               + " backoff=" + backoffMs + "ms");
+                       }
                        sleep(backoffMs);
                    } else {
                 	   if(!shouldRetry(e)) throw e;
@@ -104,6 +113,39 @@ public final class LLMChain implements ChatModel {
        );
    }
    
+   private void printDecoratorChain(ChatModel model) {
+	    StringBuilder chain = new StringBuilder();
+	    ChatModel current = model;
+	    while (current != null) {
+	        chain.append(current.getClass().getSimpleName());
+	        if (current instanceof TimedChatModel timed) {
+	            current = getDelegate(timed, "delegate");
+	        } else if (current instanceof RateLimitedChatModel rateLimited) {
+	            current = getDelegate(rateLimited, "delegate");
+	        } else {
+	            current = null;
+	        }
+	        if (current != null) chain.append(" -> ");
+	    }
+	    log("Decorator chain: " + chain);
+	}
+   private ChatModel getDelegate(ChatModel wrapper, String fieldName) {
+	    try {
+	        var field = wrapper.getClass().getDeclaredField(fieldName);
+	        field.setAccessible(true);
+	        return (ChatModel) field.get(wrapper);
+	    } catch (Exception e) {
+	        return null;
+	    }
+	}
+   
+	private String classifyReason(Exception e) {
+	    if (e instanceof RateLimitException) return "RateLimit";
+	    if (e instanceof TimeoutException) return "Timeout";
+	    if (e instanceof NetworkException) return "NetworkError";
+	    if (e instanceof InvalidAPIKeyException) return "InvalidAPIKey";
+	    return e.getClass().getSimpleName();
+	}
    private boolean shouldRetry(Exception e) {
        // Retry on transient errors only
        String message = e.getMessage();
@@ -121,9 +163,9 @@ public final class LLMChain implements ChatModel {
    
    private long calculateBackoff(int attempt, Exception lastException) {
 	    if (lastException instanceof RateLimitException rle) {
-	    	if (rle.getRetryAfterMs() > 0) {
-	    		long retryMs = rle.getRetryAfterMs() + 1000; //+1s buffer
-	    		return retryMs;
+	    	if (rle.hasRetryAfter()) {
+	    		
+	    		return 0L;
 	    	}
 	    	// Rate limit needs much longer wait — at least 30s
 	    	long seconds = 30L * attempt; // 30s, 60s, 90s

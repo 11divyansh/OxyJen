@@ -33,14 +33,24 @@ public final class TimedChatModel implements ChatModel {
 	
 	@Override
 	public String chat(String input) {
-		
+		String threadName = Thread.currentThread().getName();
+	    System.out.println("[TimedChatModel] " + threadName + " starting call, timeout=" + timeout);
+
+	    long start = System.currentTimeMillis();
 		Future<String> future = SHARED_EXECUTOR.submit(() -> delegate.chat(input));
 
         try {
-            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        	String result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            long elapsed = System.currentTimeMillis() - start;
+            System.out.println("[TimedChatModel] " + threadName + " completed in " + elapsed + "ms");
+            return result;
         } catch (java.util.concurrent.TimeoutException e) {
             future.cancel(true);
-            
+            long elapsed = System.currentTimeMillis() - start;
+            System.out.println(
+                "[TimedChatModel] " + threadName + " TIMED OUT after " + elapsed
+                + "ms (limit=" + timeout.toMillis() + "ms)"
+            );
             throw new TimeoutException(
                 delegate.getClass().getSimpleName(),
                 timeout,

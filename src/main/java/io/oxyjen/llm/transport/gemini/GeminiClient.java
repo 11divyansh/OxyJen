@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.OptionalLong;
 
 import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
 import io.oxyjen.llm.exceptions.LLMException;
@@ -61,11 +62,20 @@ public final class GeminiClient {
     }
 
     public ChatResponse chat(ChatRequest request) {
+    	String threadName = Thread.currentThread().getName();
         try {
             HttpRequest httpRequest = buildHttpRequest(request);
+            long httpStart = System.currentTimeMillis();
+            System.out.println("[GeminiClient] " + threadName + " HTTP START model=" + request.model());
             HttpResponse<String> response = httpClient.send(
                 httpRequest,
                 HttpResponse.BodyHandlers.ofString()
+            );
+            
+            long httpElapsed = System.currentTimeMillis() - httpStart;
+            System.out.println(
+                "[GeminiClient] " + threadName + " HTTP END status="
+                + response.statusCode() + " elapsed=" + httpElapsed + "ms"
             );
             if (response.statusCode() != 200) {
                 throw classifyError(response, request.model());
@@ -207,7 +217,9 @@ public final class GeminiClient {
                 "Available: gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro"
             );
             case 429 -> {
-            	long retryAfterMs = parseRetryDelay(response.body());
+            	System.out.println("Status = " + response.statusCode());
+            	System.out.println("Body = " + response.body());
+            	long retryAfterMs = parseRetryDelay(response).orElse(0L);
             	yield new RateLimitException("Gemini rate limit exceeded. Consider upgrading or adding delays.", retryAfterMs);
             }
  
@@ -220,20 +232,45 @@ public final class GeminiClient {
         };
     }
     
-    private long parseRetryDelay(String body) {
+    private OptionalLong parseRetryDelay(HttpResponse<String> response) {
         try {
+            String retryAfterHeader = response.headers().firstValue("Retry-After")
+                    .orElse(response.headers().firstValue("retry-after").orElse(null));
+            if (retryAfterHeader != null && !retryAfterHeader.isBlank()) {
+                return OptionalLong.of(parseRetryAfterHeader(retryAfterHeader));
+            }
+
+            String body = response.body();
+            if (body == null || body.isBlank()) {
+                return OptionalLong.empty();
+            }
+
             // find "retryDelay": "25.023430448s"
             int idx = body.indexOf("retryDelay");
-            if (idx == -1) return 0;
-            
+            if (idx == -1) return OptionalLong.empty();
+
             int start = body.indexOf('"', idx + 11) + 1; // skip to value
             int end = body.indexOf('"', start);
+            if (start <= 0 || end <= start) return OptionalLong.empty();
+
             String delay = body.substring(start, end); // "25.023430448s"
-            
             double seconds = Double.parseDouble(delay.replace("s", ""));
-            return (long)(seconds * 1000);
+            return OptionalLong.of((long) (seconds * 1000));
         } catch (Exception ignored) {}
-        return 0;
+        return OptionalLong.empty();
+    }
+
+    private long parseRetryAfterHeader(String headerValue) {
+        try {
+            String trimmed = headerValue.trim();
+            if (trimmed.matches("\\d+")) {
+                return Long.parseLong(trimmed) * 1000L;
+            }
+            double seconds = Double.parseDouble(trimmed.replace("s", ""));
+            return (long) (seconds * 1000);
+        } catch (Exception ignored) {
+            return 0L;
+        }
     }
 
     private String escapeJson(String str) {

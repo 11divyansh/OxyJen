@@ -1,5 +1,7 @@
 package io.oxyjen.llm;
 
+import java.util.concurrent.Semaphore;
+
 import io.oxyjen.core.Memory;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
@@ -38,18 +40,23 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
     
     @Override
     public String process(String input, NodeContext context) {
-        Memory memory = context.memory(memoryName);
-        
-        // 1. Store user input
-        memory.append("user", input);
-        
-        // 2. Call model
-        String response = model.chat(input);
-        
-        // 3. Store assistant response
-        memory.append("assistant", response);
-        
-        return response;
+        Semaphore runtimeLimiter = acquireRuntimeLimiterIfNested(context);
+        try {
+            Memory memory = context.memory(memoryName);
+            
+            // 1. Store user input
+            memory.append("user", input);
+            
+            // 2. Call model
+            String response = model.chat(input);
+            
+            // 3. Store assistant response
+            memory.append("assistant", response);
+            
+            return response;
+        } finally {
+            releaseRuntimeLimiter(runtimeLimiter);
+        }
     }
     
     @Override
@@ -112,6 +119,30 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
                 throw new IllegalStateException("ChatModel must be provided");
             }
             return new LLMNode(model, memoryName);
+        }
+    }
+
+    private Semaphore acquireRuntimeLimiterIfNested(NodeContext context) {
+        if (context == null || !context.isChild()) {
+            return null;
+        }
+        var runtime = context.getRuntime();
+        if (runtime == null) {
+            return null;
+        }
+        Semaphore limiter = runtime.getLimiter();
+        try {
+            limiter.acquire();
+            return limiter;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted waiting for runtime limiter", e);
+        }
+    }
+
+    private void releaseRuntimeLimiter(Semaphore limiter) {
+        if (limiter != null) {
+            limiter.release();
         }
     }
 }
