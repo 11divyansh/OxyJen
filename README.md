@@ -292,7 +292,6 @@ class FormatterNode implements NodePlugin<String, String> {
 ## Documentation
 
 - [Tutorial Folder](tutorials/README.md)
-- [Oxyjen Tutorials](docs/tutorials.md)
 - [Oxyjen v0.2](docs/v0.2.md)
 - [Oxyjen v0.3](docs/v0.3.md)
 - [Oxyjen v0.4](docs/v0.4.md)
