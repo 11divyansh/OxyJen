@@ -5,9 +5,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class AdaptiveRateLimiter implements RateLimiter {
 
     private final long baseIntervalMs;
-    // shared blocked-until — when Google says wait, ALL threads respect it
     private final AtomicLong blockedUntil = new AtomicLong(0);
-    // CAS slot scheduling — same as FixedIntervalRateLimiter
+    // CAS slot scheduling, same as FixedIntervalRateLimiter
     private final AtomicLong lastSlotTime = new AtomicLong(0);
 
     public AdaptiveRateLimiter(int requestsPerMinute) {
@@ -19,7 +18,7 @@ public final class AdaptiveRateLimiter implements RateLimiter {
     	while (true) {
             if (Thread.interrupted()) throw new InterruptedException();
 
-            // Step 1 — wait until blockedUntil expires
+            // wait until blockedUntil expires
             long now = System.currentTimeMillis();
             long blocked = blockedUntil.get();
             if (blocked > now) {
@@ -33,14 +32,14 @@ public final class AdaptiveRateLimiter implements RateLimiter {
                 continue;
             }
 
-            // Step 2 — try to reserve CAS slot
+            // try to reserve CAS slot
             now = System.currentTimeMillis();
             long last = lastSlotTime.get();
             long next = last + baseIntervalMs;
 
             if (next <= now) {
                 if (lastSlotTime.compareAndSet(last, now)) {
-                    // Step 3 — re-check blockedUntil after CAS success
+                    // re-check blockedUntil after CAS success
                     // another thread might have received 429 between
                     // our blockedUntil check and CAS
                     if (blockedUntil.get() > System.currentTimeMillis()) {
@@ -56,13 +55,13 @@ public final class AdaptiveRateLimiter implements RateLimiter {
                     // re-check blockedUntil after CAS
                     long recheck = blockedUntil.get();
                     if (recheck > next) {
-                        // blockedUntil is beyond our slot — retry
+                        // blockedUntil is beyond our slot, retry
                         lastSlotTime.compareAndSet(next, last); // best effort rollback
                         continue;
                     }
                     long sleepMs = next - System.currentTimeMillis();
                     if (sleepMs > 0) Thread.sleep(sleepMs);
-                    // Step 4 — recheck after sleeping
+                    // recheck after sleep
                     // blockedUntil may have been updated while we slept
                     if (blockedUntil.get() > System.currentTimeMillis()) {
                         continue; // back to top

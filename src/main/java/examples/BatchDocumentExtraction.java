@@ -29,6 +29,7 @@ import io.oxyjen.llm.prompts.Variable;
 import io.oxyjen.llm.schema.SchemaGenerator;
 import io.oxyjen.llm.schema.SchemaNode;
 import io.oxyjen.llm.transport.gemini.GeminiChatModel;
+import io.oxyjen.resilience.ratelimit.RateLimiter;
 import io.oxyjen.resilience.ratelimit.RateLimiters;
 
 public class BatchDocumentExtraction {
@@ -59,25 +60,15 @@ public class BatchDocumentExtraction {
 		String apiKey = requireEnv("GEMINI_API_KEY");
 	    String modelName = envOrDefault("OXYJEN_GEMINI_MODEL", DEFAULT_MODEL);
 	    String fallbackModelName = envOrDefault("OXYJEN_GEMINI_FALLBACK_MODEL", FALLBACK_MODEL);
+	    RateLimiter limiter = RateLimiters.geminiFreeTier();
 
 	    // The batch example consumes multiple documents instead of one document string.
 	    List<String> documents = args.length > 0
 	            ? List.of(Files.readString(Path.of(args[0])))
 	            : sampleDocuments(); // returns List<String>
+	    ChatModel rateLimitedChain = buildChain(apiKey, modelName, limiter);
 
-	    ChatModel primary = geminiModel(apiKey, modelName);
-	    ChatModel fallback = geminiModel(apiKey, fallbackModelName);
-	    LLMChain chain = LLMChain.builder()
-	            .primary(primary)
-	            .fallback(fallback)
-	            .retry(3)
-	            .timeout(Duration.ofSeconds(45))
-	            .exponentialBackoff()
-	            .maxBackoff(Duration.ofSeconds(60))
-	            .jitter(0.15)
-	            .build();
-
-	    Graph graph = buildGraph(chain);
+	    Graph graph = buildGraph(rateLimitedChain);
 	    ExecutionRuntime runtime = ExecutionRuntime.builder()
 	            .maxConcurrency(3)
 	            .failureMode(FailureMode.COLLECT_ERRORS)
@@ -114,13 +105,13 @@ public class BatchDocumentExtraction {
 		
 	    // MapNode: same extraction function is applied to every document concurrently.
 	    MapNode<String, DocumentExtraction> batchExtractor = MapNode.<String, DocumentExtraction>builder()
-	            .mapWith(documentText -> {
+	            .mapWith((documentText, childContext) -> {
 	                // The lambda is the batch work unit: build a prompt, call the extractor,
 	                // and return one structured extraction per input document.
 	                String prompt = "Extract structured fields from this document.\n" +
 	                        "Use \"unknown\" for absent fields. Use [] for absent lists.\n\n" +
 	                        "Document:\n" + documentText;
-	                return extractor.process(prompt, new NodeContext());
+	                return extractor.process(prompt, childContext);
 	            })
 	            .timeout(180, TimeUnit.SECONDS)
 	            .maxInFlight(3)
@@ -135,7 +126,7 @@ public class BatchDocumentExtraction {
 
 	    // Second batch pass: every extracted document is scored for operational risk.
 	    MapNode<DocumentExtraction, RiskAssessment> batchRisk = MapNode.<DocumentExtraction, RiskAssessment>builder()
-	            .mapWith(extraction -> {
+	            .mapWith((extraction, childContext) -> {
 	                String prompt = """
 	                		Assess this extracted document for operational risk.
 	                		riskLevel must be LOW, MEDIUM, or HIGH.
@@ -145,7 +136,7 @@ public class BatchDocumentExtraction {
                     
 	                		Extraction:
 	                		""" + extraction;
-	                return riskNode.process(prompt, new NodeContext());
+	                return riskNode.process(prompt, childContext);
 	            })
 	            .timeout(180, TimeUnit.SECONDS)
 	            .maxInFlight(3)
@@ -196,12 +187,21 @@ public class BatchDocumentExtraction {
 	            .build();
 	}
 	
-	public static ChatModel geminiModel(String apiKey, String modelName) {
+	public static ChatModel buildChain(String apiKey, String modelName, RateLimiter limiter) {
 		ChatModel model = LLM.gemini(modelName, apiKey);
 		if(model instanceof GeminiChatModel gemini) {
-			return gemini.withTemperature(0.0).withMaxTokens(4096);
+			model =  gemini.withTemperature(0.0).withMaxTokens(4096);
 		}
-		return model;
+		model = LLM.withRateLimit(model, limiter);
+		LLMChain chain = LLMChain.builder()
+	            .primary(model)
+	            .retry(3)
+	            .timeout(Duration.ofSeconds(90))
+	            .exponentialBackoff()
+	            .maxBackoff(Duration.ofSeconds(60))
+	            .jitter(0.15)
+	            .build();
+		return chain;
 	}
 	
 	private static String requireEnv(String name) {
