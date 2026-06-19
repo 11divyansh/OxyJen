@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -17,6 +18,9 @@ import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.graph.ParallelExecutor;
+import io.oxyjen.graph.branching.MergeNode;
+import io.oxyjen.graph.concurrency.GatherNode;
+import io.oxyjen.graph.concurrency.MapNode;
 
 class GraphBuilderTests {
 
@@ -29,6 +33,52 @@ class GraphBuilderTests {
 	            .build();
 	    assertEquals(2, graph.getNodes().size());
 	    assertEquals(1, graph.getRootNodes().size());
+	}
+	@Test
+	void shouldAutoUnwrapGatherIntoMapNode() {
+	    GatherNode gather = GatherNode.builder()
+	            .aggregate(GatherNode.Aggregation.LIST)
+	            .build("gather");
+	    MapNode<String, Integer> lengths = MapNode.<String, Integer>builder()
+	            .mapWith((value, ctx) -> value.length())
+	            .continueOnError()
+	            .build("lengths");
+	    Graph graph = GraphBuilder.named("auto-gather")
+	            .addNode("start", (NodePlugin<Object, List<String>>) (input, ctx) -> List.of("a", "bb", "ccc"))
+	            .addNode("gather", gather)
+	            .addNode("lengths", lengths)
+	            .connect("start", "gather")
+	            .connect("gather", "lengths")
+	            .build();
+	    MapNode.MapResult<Integer> result = new ParallelExecutor().runSingle(graph, null, new NodeContext());
+	    assertEquals(List.of(1, 2, 3), result.toSuccessfulList());
+	}
+	@Test
+	void shouldAutoUnwrapMergeIntoStandardConsumer() {
+	    MergeNode merge = new MergeNode.Builder()
+	            .expect("A", "B")
+	            .build("merge");
+	    NodePlugin<Map<String, Object>, Integer> consumer = new NodePlugin<>() {
+	        @Override
+	        public Integer process(Map<String, Object> input, NodeContext context) {
+	            return input.size();
+	        }
+	        @Override
+	        public String getName() {
+	            return "consumer";
+	        }
+	    };
+	    Graph graph = GraphBuilder.named("auto-merge")
+	            .addNode("A", new Nodes.InputNode())
+	            .addNode("B", new Nodes.AppendNode("-B"))
+	            .addNode("merge", merge)
+	            .addNode("consumer", consumer)
+	            .connect("A", "merge")
+	            .connect("B", "merge")
+	            .connect("merge", "consumer")
+	            .build();
+	    Integer result = new ParallelExecutor().runSingle(graph, "x", new NodeContext());
+	    assertEquals(2, result);
 	}
 	@Test
 	void shouldThrowOnDuplicateNodeNames() {

@@ -1,11 +1,6 @@
 package io.oxyjen.graph.validation;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.lang.reflect.WildcardType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +18,7 @@ import java.util.stream.Collectors;
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.core.NodeTypeInspector;
 import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
@@ -198,117 +194,23 @@ public final class DAGValidator {
             if (source instanceof BranchNode ||
             	source instanceof RouterNode ||
             	source instanceof MergeNode) continue;
-            Type sourceOutput = resolveOutputType(source);
-            Type targetInput  = resolveInputType(target);
+            Type sourceOutput = NodeTypeInspector.resolveOutputType(source);
+            Type targetInput  = NodeTypeInspector.resolveInputType(target);
 
             if (sourceOutput == null || targetInput == null) continue; // can't determine
             
 
             // Object input accepts anything. Common in prompt nodes
             if (isObjectType(targetInput) || isObjectType(sourceOutput)) continue;
-            if (!isAssignable(sourceOutput, targetInput)) {
+            if (!NodeTypeInspector.isAssignable(sourceOutput, targetInput)) {
                 errors.add("Type mismatch on edge [" + edge.getSource().getName()
                     + "] -> [" + edge.getTarget().getName() + "]: "
-                    + "source outputs [" + typeName(sourceOutput) + "] "
-                    + "but target expects [" + typeName(targetInput) + "]. "
+                    + "source outputs [" + NodeTypeInspector.typeName(sourceOutput) + "] "
+                    + "but target expects [" + NodeTypeInspector.typeName(targetInput) + "]. "
                     + "Check your .connect() call in GraphBuilder."
                 );
             }
         }
-    }
-    
-    /**
-     * Resolves the OUTPUT type (O) of a NodePlugin<I, O> implementation.
-     * Walks generic interfaces and superclass to find NodePlugin parameterization.
-     */
-    private static Type resolveOutputType(NodePlugin<?, ?> node) {
-        return resolveTypeArg(node.getClass(), 1);
-    }
-
-    /**
-     * Resolves the INPUT type (I) of a NodePlugin<I, O> implementation.
-     */
-    private static Type resolveInputType(NodePlugin<?, ?> node) {
-        return resolveTypeArg(node.getClass(), 0);
-    }
-    
-    private static Type resolveTypeArg(Class<?> clazz, int argIndex) {
-        if (clazz == null || clazz == Object.class) return null;
-
-        // Check direct interfaces
-        for (Type iface : clazz.getGenericInterfaces()) {
-            if (iface instanceof ParameterizedType pt
-                    && pt.getRawType() instanceof Class<?> raw
-                    && raw == NodePlugin.class) {
-                Type arg = pt.getActualTypeArguments()[argIndex];
-                // If it's a TypeVariable (e.g. <T>) we can't resolve - return null
-                if (arg instanceof TypeVariable<?>) return null;
-                return arg;
-            }
-        }
-
-        // Check superclass (for abstract base classes implementing NodePlugin)
-        Type superclass = clazz.getGenericSuperclass();
-        if (superclass instanceof ParameterizedType pt
-                && pt.getRawType() instanceof Class<?> raw
-                && raw == NodePlugin.class) {
-            Type arg = pt.getActualTypeArguments()[argIndex];
-            if (arg instanceof TypeVariable<?>) return null;
-            return arg;
-        }
-
-        // Recurse up the hierarchy
-        if (superclass instanceof Class<?> sc) {
-            Type result = resolveTypeArg(sc, argIndex);
-            if (result != null) return result;
-        }
-
-        // Recurse into interfaces
-        for (Type iface : clazz.getGenericInterfaces()) {
-            if (iface instanceof Class<?> ic) {
-                Type result = resolveTypeArg(ic, argIndex);
-                if (result != null) return result;
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * Checks if sourceOutput is assignable to targetInput.
-     * Handles Class, ParameterizedType, wildcards.
-     */
-    private static boolean isAssignable(Type sourceOutput, Type targetInput) {
-    	Class<?> sourceRaw = rawType(sourceOutput);
-    	Class<?> targetRaw = rawType(targetInput);
-    	if (sourceRaw == null || targetRaw == null) return false;
-    	return targetRaw.isAssignableFrom(sourceRaw);
-    }
-    
-    /** Extracts the raw Class from any Type.*/
-    private static Class<?> rawType(Type type) {
-    	if (type instanceof Class<?> c) return c;
-    	if (type instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> c) return c;
-    	if (type instanceof WildcardType wt) {
-    		Type[] upper = wt.getUpperBounds();
-    		if (upper.length > 0) return rawType(upper[0]);
-    	}
-    	if (type instanceof GenericArrayType gat) {
-    		Class<?> component = rawType(gat.getGenericComponentType());
-    		if (component != null) return Array.newInstance(component, 0).getClass();
-    	}
-    	return null;
-    }
-    
-    private static String typeName(Type type) {
-        if (type instanceof Class<?> c) return c.getSimpleName();
-        if (type instanceof ParameterizedType pt) {
-            String raw = rawType(pt) != null ? rawType(pt).getSimpleName() : "?";
-            String args = Arrays.stream(pt.getActualTypeArguments())
-                    .map(DAGValidator::typeName)
-                    .collect(Collectors.joining(", "));
-            return raw + "<" + args + ">";
-        }
-        return type.getTypeName();
     }
     
     private static boolean isObjectType(Type type) {

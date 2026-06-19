@@ -1,5 +1,6 @@
 package io.oxyjen.core;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -12,12 +13,17 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 
+import io.oxyjen.graph.branching.BranchNode;
+import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
 import io.oxyjen.graph.edges.FailureEdge;
 import io.oxyjen.graph.edges.RouteEdge;
+import io.oxyjen.graph.concurrency.GatherNode;
+import io.oxyjen.graph.concurrency.MapNode;
+import io.oxyjen.graph.concurrency.ParallelNode;
 
 /**
  * Builder pattern for constructing {@link Graph} instances.
@@ -30,6 +36,7 @@ public class GraphBuilder {
     Map<String, NodePlugin<?, ?>> nodes = new LinkedHashMap<>();
     private final List<Edge> edges = new ArrayList<>();
     private final List<String> anyFailureTargets = new ArrayList<>();
+    private int internalNodeCounter = 0;
 
     public static GraphBuilder named(String name) {
         GraphBuilder builder = new GraphBuilder();
@@ -57,6 +64,10 @@ public class GraphBuilder {
         NodePlugin<?, ?> target = getNode(to);
         if (source.unwrap() instanceof RouterNode<?> router && router.hasRoute(to)) {
         	edges.add(new RouteEdge(source, target));
+        } else if (shouldInsertOutputAdapter(source, target)) {
+            NodePlugin<?, ?> adapter = createOutputAdapter(from, to, source, target);
+            edges.add(new DirectEdge(source, adapter));
+            edges.add(new DirectEdge(adapter, target));
         } else {
         	edges.add(new DirectEdge(source, target));
         }
@@ -72,7 +83,13 @@ public class GraphBuilder {
     ) {
         NodePlugin<?, ?> source = getNode(from);
         NodePlugin<?, ?> target = getNode(to);
-        edges.add(new ConditionalEdge<>(source, target, predicate));
+        if (shouldInsertOutputAdapter(source, target)) {
+            NodePlugin<?, ?> adapter = createOutputAdapter(from, to, source, target);
+            edges.add(new DirectEdge(source, adapter));
+            edges.add(new ConditionalEdge<>(adapter, target, predicate));
+        } else {
+            edges.add(new ConditionalEdge<>(source, target, predicate));
+        }
         return this;
     }
     public RouteBuilder route(
@@ -232,6 +249,70 @@ public class GraphBuilder {
         }
         return visited;
     }
+
+    private boolean shouldInsertOutputAdapter(NodePlugin<?, ?> source, NodePlugin<?, ?> target) {
+        NodePlugin<?, ?> actualSource = source.unwrap();
+        NodePlugin<?, ?> actualTarget = target.unwrap();
+
+        if (actualSource instanceof BranchNode || actualSource instanceof RouterNode) {
+            return false;
+        }
+        if (actualTarget instanceof GatherNode
+                && (actualSource instanceof MapNode || actualSource instanceof ParallelNode)) {
+            return false;
+        }
+        Class<?> carrierType = carrierType(actualSource);
+        if (carrierType == null) {
+            return false;
+        }
+        return !isExplicitCarrierTarget(actualTarget, carrierType);
+    }
+
+    private Class<?> carrierType(NodePlugin<?, ?> source) {
+        if (source instanceof GatherNode) return GatherNode.GatherResult.class;
+        if (source instanceof MapNode) return MapNode.MapResult.class;
+        if (source instanceof ParallelNode) return ParallelNode.ParallelResult.class;
+        if (source instanceof MergeNode) return MergeNode.MergeResult.class;
+        return null;
+    }
+
+    private boolean isExplicitCarrierTarget(NodePlugin<?, ?> target, Class<?> sourceCarrierType) {
+        Type targetInput = NodeTypeInspector.resolveInputType(target);
+        if (targetInput == null) {
+            return false;
+        }
+        Class<?> targetRaw = NodeTypeInspector.rawType(targetInput);
+        if (targetRaw == null) {
+            return false;
+        }
+        return targetRaw == sourceCarrierType;
+    }
+
+    private NodePlugin<?, ?> createOutputAdapter(String from, String to, NodePlugin<?, ?> source, NodePlugin<?, ?> target) {
+        String adapterName = "__adapter__" + (++internalNodeCounter) + "__" + from + "__to__" + to;
+        NodePlugin<Object, Object> delegate = createAdapterDelegate(source);
+        addNode(adapterName, delegate);
+        return getNode(adapterName);
+    }
+
+    private NodePlugin<Object, Object> createAdapterDelegate(NodePlugin<?, ?> source) {
+        NodePlugin<?, ?> actualSource = source.unwrap();
+
+        if (actualSource instanceof GatherNode) {
+            return new OutputAdapterNode("GatherNode.items()", input -> ((GatherNode.GatherResult) input).items());
+        }
+        if (actualSource instanceof MapNode) {
+            return new OutputAdapterNode("MapNode.toSuccessfulList()", input -> ((MapNode.MapResult<?>) input).toSuccessfulList());
+        }
+        if (actualSource instanceof ParallelNode) {
+            return new OutputAdapterNode("ParallelNode.allOutputs()", input -> ((ParallelNode.ParallelResult<?>) input).allOutputs());
+        }
+        if (actualSource instanceof MergeNode) {
+            return new OutputAdapterNode("MergeNode.getMerged()", input -> ((MergeNode.MergeResult) input).getMerged());
+        }
+        throw new IllegalStateException("No output adapter available for source node: " + actualSource.getClass().getName());
+    }
+
     public static class RouteBuilder {
         private final GraphBuilder builder;
         private final NodePlugin<?, ?> source;
@@ -330,5 +411,25 @@ class NamedNode<I, O> implements NodePlugin<I, O> {
     @Override
     public NodePlugin<?, ?> unwrap() {
         return delegate;
+    }
+}
+
+final class OutputAdapterNode implements NodePlugin<Object, Object> {
+    private final String name;
+    private final Function<Object, Object> adapter;
+
+    OutputAdapterNode(String name, Function<Object, Object> adapter) {
+        this.name = name;
+        this.adapter = adapter;
+    }
+
+    @Override
+    public Object process(Object input, NodeContext context) {
+        return adapter.apply(input);
+    }
+
+    @Override
+    public String getName() {
+        return name;
     }
 }
