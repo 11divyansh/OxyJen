@@ -451,7 +451,7 @@ public final class DocumentExtractionExample {
         }
     }
 
-    static final class FinalReportPromptNode implements NodePlugin<Object, String> {
+    static final class FinalReportPromptNode implements NodePlugin<Map<String, Object>, String> {
         private static final PromptTemplate TEMPLATE = PromptTemplate.of(
                 """
                 Create a final document extraction report for an operations user.
@@ -472,12 +472,10 @@ public final class DocumentExtractionExample {
         );
 
         @Override
-        public String process(Object input, NodeContext context) {
-            // The merge result becomes the final user-facing narrative.
-            MergeNode.MergeResult merge = (MergeNode.MergeResult) input;
+        public String process(Map<String, Object> input, NodeContext context) {
             return TEMPLATE.render(
-                    "successes", merge.getSuccess(),
-                    "errors", merge.getErrors()
+                    "successes", input.get("successes"),
+                    "errors", input.get("errors")
             );
         }
     }

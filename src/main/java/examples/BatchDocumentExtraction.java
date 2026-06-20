@@ -168,7 +168,6 @@ public class BatchDocumentExtraction {
 	            .addNode("start", new CaptureDocumentsNode())
 	            .addNode("batchExtractor", batchExtractor)
 	            .addNode("gatherExtractions", gatherExtractions)
-	            .addNode("unwrapExtractions", new UnwrapExtractionsNode())
 	            .addNode("batchRisk", batchRisk)
 	            .addNode("gatherRisks", gatherRisks)
 	            .addNode("batchReportPrompt", new BatchReportPromptNode())
@@ -177,8 +176,7 @@ public class BatchDocumentExtraction {
 	            .addNode("failureReport", failureLlm)
 	            .connect("start", "batchExtractor")
 	            .connect("batchExtractor", "gatherExtractions")
-	            .connect("gatherExtractions", "unwrapExtractions")
-	            .connect("unwrapExtractions", "batchRisk")
+	            .connect("gatherExtractions", "batchRisk")
 	            .connect("batchRisk", "gatherRisks")
 	            .connect("gatherRisks", "batchReportPrompt")
 	            .connect("batchReportPrompt", "batchReport")
@@ -202,7 +200,7 @@ public class BatchDocumentExtraction {
 	            .jitter(0.15)
 	            .build();
 		return chain;
-	}
+	} 
 	
 	private static String requireEnv(String name) {
 	    String value = System.getenv(name);
@@ -292,7 +290,7 @@ public class BatchDocumentExtraction {
 	    }
 	}
 	
-	static final class BatchReportPromptNode implements NodePlugin<Object, String> {
+	static final class BatchReportPromptNode implements NodePlugin<List<RiskAssessment>, String> {
 	    private static final PromptTemplate TEMPLATE = PromptTemplate.of(
 	            """
 	            Create a batch document processing report.
@@ -306,10 +304,8 @@ public class BatchDocumentExtraction {
 	    );
 
 	    @Override
-	    public String process(Object input, NodeContext context) {
-	        // GatherNode produces a batch-shaped result; this prompt turns it into one report.
-	        GatherNode.GatherResult risks = (GatherNode.GatherResult) input;
-	        return TEMPLATE.render("results", risks.items());
+	    public String process(List<RiskAssessment> input, NodeContext context) {
+	        return TEMPLATE.render("results", input);
 	    }
 	}
 
@@ -333,18 +329,4 @@ public class BatchDocumentExtraction {
 	    }
 	}
 	
-	/* This is actually a common pattern when using GatherNode
-	 * you always need to unwrap the GatherResult before passing 
-	 * to a node that expects the raw items.
-	 */
-	static final class UnwrapExtractionsNode implements NodePlugin<GatherNode.GatherResult, List<DocumentExtraction>> {
-	    @Override
-	    @SuppressWarnings("unchecked")
-	    public List<DocumentExtraction> process(GatherNode.GatherResult input, NodeContext context) {
-	        // Unwrap GatherResult back to a plain list so the next MapNode receives raw typed records.
-	        List<DocumentExtraction> extractions = input.items();
-	        context.getLogger().info("[UnwrapExtractions] Unwrapped " + extractions.size() + " extractions");
-	        return extractions;
-	    }
-	}
 }
