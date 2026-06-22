@@ -18,7 +18,6 @@ import java.util.function.Function;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
-import io.oxyjen.graph.ParallelExecutor.NodeFailure;
 
 /**
  * A fan-in node that aggregates results from multiple parallel upstream branches.
@@ -115,32 +114,47 @@ public class MergeNode implements NodePlugin<Object, Object> {
         		"[DEBUG] Contribute called for: " + contributorName + " → " + name
         );
         boolean accepted;
-        if (value instanceof NodeFailure failure) {
-        	accepted = state.errors.putIfAbsent(contributorName, failure.error()) == null;
-        	if (!accepted) {
-        		context.getLogger().warning(
+        acceptContribution(contributorName, value, null, context);
+    }
+
+    public void contributeFailure(String contributorName, Throwable failure, NodeContext context) {
+        acceptContribution(contributorName, null, failure, context);
+    }
+
+    private void acceptContribution(
+            String contributorName,
+            Object value,
+            Throwable failure,
+            NodeContext context
+    ) {
+        MergeState state = getState(context);
+        boolean accepted;
+        if (failure != null) {
+            accepted = state.errors.putIfAbsent(contributorName, failure) == null;
+            if (!accepted) {
+                context.getLogger().warning(
                         "[MergeNode:" + name + "] Duplicate failure from: " + contributorName
                 );
                 return;
-        	}
-        	int count = state.arrived.incrementAndGet();
-        	context.getLogger().warning(
-        			"[MergeNode:" + name + "] Received FAILURE from: " + contributorName +
+            }
+            int count = state.arrived.incrementAndGet();
+            context.getLogger().warning(
+                    "[MergeNode:" + name + "] Received FAILURE from: " + contributorName +
                     " (" + count + "/" + expectedContributors.size() + " arrived)"
             );
         } else {
-        	accepted = state.success.putIfAbsent(contributorName, value) == null;
-        	if (!accepted) {
+            accepted = state.success.putIfAbsent(contributorName, value) == null;
+            if (!accepted) {
                 context.getLogger().warning(
-                    "[MergeNode:" + name + "] Duplicate contribution from: " + contributorName
+                        "[MergeNode:" + name + "] Duplicate contribution from: " + contributorName
                 );
                 return;
             }
-        	state.arrivalOrder.add(contributorName);
-        	int count = state.arrived.incrementAndGet();
+            state.arrivalOrder.add(contributorName);
+            int count = state.arrived.incrementAndGet();
             context.getLogger().info(
-            		 "[MergeNode:" + name + "] Received SUCCESS from: " + contributorName +
-                     " (" + count + "/" + expectedContributors.size() + " arrived)"
+                    "[MergeNode:" + name + "] Received SUCCESS from: " + contributorName +
+                    " (" + count + "/" + expectedContributors.size() + " arrived)"
             );
         }
         state.latch.countDown();

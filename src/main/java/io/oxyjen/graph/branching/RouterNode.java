@@ -16,7 +16,7 @@ import java.util.function.Predicate;
  * - Fires all matching routes
  * - Can trigger multiple downstream nodes in parallel
  *
- * This node returns a RoutedResult, which the executor uses to
+ * This node returns a plain route map, which the executor uses to
  * directly schedule downstream nodes (no ConditionalEdge required).
  *
  * Example:
@@ -30,15 +30,6 @@ import java.util.function.Predicate;
  * → routes to BOTH NodeA and NodeB
  */
 public class RouterNode<I> implements NodePlugin<I, Object> {
-
-    /**
-     * Output returned by RouterNode.
-     * Represents all downstream routes to execute.
-     *
-     * Map:
-     *   nextNodeName -> transformedOutput
-     */
-    public record RoutedResult(Map<String, Object> routes) {}
 
     /**
      * Internal route definition.
@@ -69,7 +60,7 @@ public class RouterNode<I> implements NodePlugin<I, Object> {
      *
      * - Evaluates ALL routes
      * - Collects all matching routes
-     * - Returns RoutedResult for executor to handle fan-out
+     * - Returns a route map for executor to handle fan-out
      */
     @Override
     public Object process(I input, NodeContext context) {
@@ -100,7 +91,7 @@ public class RouterNode<I> implements NodePlugin<I, Object> {
                     "[RouterNode:" + name + "] No routes fired (dead end)"
             );
         }
-        return new RoutedResult(fired);
+        return fired;
     }
     
     public boolean hasRoute(String targetNodeName) {

@@ -20,8 +20,7 @@ import io.oxyjen.core.NodePlugin;
  * @param <I> Input type this node receives.
  */
 public class BranchNode<I> implements NodePlugin<I, Object> {
-
-	public record RoutedResult(String nextNode, Object output) {}
+    public static final String ROUTE_KEY_PREFIX = "__branch_route__";
 
     private record Branch<I>(
         String name,
@@ -53,19 +52,21 @@ public class BranchNode<I> implements NodePlugin<I, Object> {
             if (branch.predicate().test(input)) {
                 Object output = branch.transform().apply(input);
                 incrementMetric(context, branch.name);
+                context.setMetadata(routeKey(), branch.nextNode);
                 context.getLogger().info(
                     "[BranchNode:" + name + "] -> " + branch.name()
                 );
-                return new RoutedResult(branch.nextNode, output);
+                return output;
             }
         }
 
         // no branch matched
         if (elseBranch != null) {
             Object output = elseBranch.apply(input);
+            context.setMetadata(routeKey(), elseNextNode);
             context.getLogger().info(
                 "[BranchNode:" + name + "] No branch matched, using else");
-            return new RoutedResult(elseNextNode, output);
+            return output;
         }
 
         throw new NoBranchMatchedException(name, input);
@@ -73,6 +74,10 @@ public class BranchNode<I> implements NodePlugin<I, Object> {
     private void incrementMetric(NodeContext ctx, String branch) {
         String key = "branch." + name + "." + branch + ".count";
         ctx.getRuntime().getMetrics().increment(key);
+    }
+
+    private String routeKey() {
+        return ROUTE_KEY_PREFIX + name;
     }
 
     @Override

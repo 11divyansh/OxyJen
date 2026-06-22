@@ -223,8 +223,8 @@ class MergeNodeWithExecutor {
 	    NodePlugin<Object, Object> consumer = new NodePlugin<>() {
 	        @Override
 	        public Object process(Object input, NodeContext ctx) {
-	            MergeNode.MergeResult result = (MergeNode.MergeResult) input;
-	            return result.getSuccess().size();
+	            Map<?, ?> result = (Map<?, ?>) input;
+	            return result.size();
 	        }
 	        @Override
 	        public String getName() {

@@ -202,7 +202,7 @@ public class BatchDocumentExtraction {
 		return chain;
 	} 
 	
-	private static String requireEnv(String name) {
+	private static String requireEnv(String name){
 	    String value = System.getenv(name);
 	    if (value == null || value.isBlank()) {
 	        throw new IllegalStateException(

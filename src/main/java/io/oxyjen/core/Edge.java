@@ -1,6 +1,4 @@
 package io.oxyjen.core;
-
-import io.oxyjen.graph.ParallelExecutor.NodeFailure;
 import io.oxyjen.graph.edges.ConditionalEdge;
 import io.oxyjen.graph.edges.CyclicEdge;
 import io.oxyjen.graph.edges.DirectEdge;
@@ -56,7 +54,7 @@ public abstract class Edge {
         return true;
     }
     
-    public boolean shouldTraverseFailure(NodeFailure failure, NodeContext context) {
+    public boolean shouldTraverseFailure(Throwable failure, NodeContext context) {
         // default: skip on failure
         return false;
     }

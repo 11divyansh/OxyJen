@@ -3,14 +3,13 @@ package io.oxyjen.graph.edges;
 import io.oxyjen.core.Edge;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
-import io.oxyjen.graph.ParallelExecutor.NodeFailure;
 
 /**
  * Represents a connection from a {@link RouterNode} to one of its route targets.
  *
  * Unlike {@link DirectEdge} which always traverses on success, a RouteEdge
  * is CONDITIONAL - it only fires when the RouterNode's predicate for this
- * target evaluates to true and the route appears in the RoutedResult map.
+ * target evaluates to true and the route appears in the route map.
  *
  * RouteEdge is created automatically by {@link GraphBuilder#connect(String, String)}
  * when the source node is a RouterNode. Framework users never create RouteEdge
@@ -25,7 +24,7 @@ public class RouteEdge extends Edge{
     public boolean shouldTraverse(Object output, NodeContext context) { return true; } // traversal decision is made by RouterNode, not the edge 
 
     @Override
-    public boolean shouldTraverseFailure(NodeFailure failure, NodeContext context) { return false; } // route edges never traverse on failure
+    public boolean shouldTraverseFailure(Throwable failure, NodeContext context) { return false; } // route edges never traverse on failure
 
     @Override
     public String getLabel() { return "route"; }

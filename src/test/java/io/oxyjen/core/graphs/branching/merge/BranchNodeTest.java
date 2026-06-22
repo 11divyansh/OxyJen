@@ -172,11 +172,8 @@ class BranchNodeTest {
 	        NodeContext ctx = new NodeContext();
 	        ctx.setRuntime(ExecutionRuntime.defaultRuntime());
 	        Object result = node.process("apple", ctx);
-	        assertInstanceOf(BranchNode.RoutedResult.class, result);
-	        BranchNode.RoutedResult routed =
-	            (BranchNode.RoutedResult) result;
-	        assertEquals("A", routed.nextNode());
-	        assertEquals("apple", routed.output());
+	        assertEquals("apple", result);
+	        assertEquals("A", ctx.getMetadata(BranchNode.ROUTE_KEY_PREFIX + "branch"));
 	    }
 	    @Test
 	    void branch_handles_null_input_with_else() {

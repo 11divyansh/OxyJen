@@ -181,7 +181,7 @@ class RouterNodeTest {
 	        .build();
 	    NodeContext ctx = new NodeContext();
 	    Map<String, Object> result = executor.run(graph, "input", ctx);
-	    assertTrue(result.get("fail") instanceof ParallelExecutor.NodeFailure);
+	    assertTrue(result.get("fail") instanceof RuntimeException);
 	}
 	class SlowNode implements NodePlugin<String, String> {
 	    private final String name;

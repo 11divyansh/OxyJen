@@ -50,7 +50,7 @@ class MergeNodeTest {
 	        MergeNode node = createNode();
 	        node.register(context);
 	        node.contribute("A", "a", context);
-	        node.contribute("B", new ParallelExecutor.NodeFailure("B", new RuntimeException("fail")), context);
+	        node.contributeFailure("B", new RuntimeException("fail"), context);
 	        node.contribute("C", "c", context);
 	        MergeNode.MergeResult result =
 	                (MergeNode.MergeResult) node.process(null, context);
@@ -64,9 +64,9 @@ class MergeNodeTest {
 	 void shouldHandleAllFailures() {
 	        MergeNode node = createNode();
 	        node.register(context);
-	        node.contribute("A", new ParallelExecutor.NodeFailure("A", new RuntimeException()), context);
-	        node.contribute("B", new ParallelExecutor.NodeFailure("B", new RuntimeException()), context);
-	        node.contribute("C", new ParallelExecutor.NodeFailure("C", new RuntimeException()), context);
+	        node.contributeFailure("A", new RuntimeException(), context);
+	        node.contributeFailure("B", new RuntimeException(), context);
+	        node.contributeFailure("C", new RuntimeException(), context);
 	        MergeNode.MergeResult result =
 	                (MergeNode.MergeResult) node.process(null, context);
 	        assertTrue(result.getSuccess().isEmpty());

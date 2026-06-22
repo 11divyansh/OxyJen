@@ -184,7 +184,7 @@ public final class DAGValidator {
             List<String> warnings
     ) {
         for (Edge edge : graph.getAllEdges()) {
-            // skip failure/cyclic - they carry NodeFailure or loop back, not typed
+            // skip failure/cyclic - failure edges carry Throwable state and loops are not typed
             if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
 
             NodePlugin<?, ?> source = edge.getSource().unwrap();

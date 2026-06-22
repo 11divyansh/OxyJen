@@ -18,7 +18,6 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionRuntime;
-import io.oxyjen.graph.branching.BranchNode;
 import io.oxyjen.graph.branching.MergeNode;
 import io.oxyjen.graph.branching.RouterNode;
 import io.oxyjen.graph.edges.CyclicEdge;
@@ -41,7 +40,6 @@ public class ParallelExecutor {
         this.runtime = runtime;
     }
    
-    public record NodeFailure(String nodeName, Throwable error) {}
     /**
      * Runs the graph and returns outputs from all terminal nodes, keyed by node name.
      *
@@ -57,6 +55,7 @@ public class ParallelExecutor {
  
         // nodeOutput[node] = the output it produced (filled as nodes complete)
         Map<String, Optional<Object>> nodeOutputs = new ConcurrentHashMap<>();
+        Map<String, Throwable> nodeFailures = new ConcurrentHashMap<>();
         Set<String> scheduled = ConcurrentHashMap.newKeySet();
         Set<NodePlugin<?, ?>> cyclicTargets = findCyclicTargets(graph);
         Set<NodePlugin<?, ?>> inProgress = ConcurrentHashMap.newKeySet();
@@ -72,7 +71,7 @@ public class ParallelExecutor {
         for (NodePlugin<?, ?> root : graph.getRootNodes()) {
         	if (scheduled.add(root.getName()))
         		rootFutures.add(
-        				executeNodeAsync(root, input, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+        				executeNodeAsync(root, input, graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures)
         		);
         }
         CompletableFuture<Void> allDone = CompletableFuture.allOf(
@@ -164,6 +163,7 @@ public class ParallelExecutor {
             Graph graph,
             NodeContext context,
             Map<String, Optional<Object>> nodeOutputs,
+            Map<String, Throwable> nodeFailures,
             Set<NodePlugin<?, ?>> inProgress,
             Set<String> scheduled,
             Set<NodePlugin<?, ?>> cyclicTargets,
@@ -184,14 +184,14 @@ public class ParallelExecutor {
     	
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
         	try {
-        		context.getLogger().info("[DAG] Executing: " + node.getName());
-        		actualNode.onStart(context);
+                context.getLogger().info("[DAG] Executing: " + node.getName());
+                actualNode.onStart(context);
                 Object output = actualNode.process(input, context);
                 actualNode.onFinish(context);
                 context.getLogger().info("[DAG] Completed: " + node.getName());
-                if (output instanceof BranchNode.RoutedResult routed) {
-                	nodeOutputs.put(node.getName(), Optional.ofNullable(routed.output()));
-                	return routed;
+                if (actualNode instanceof RouterNode) {
+                    nodeOutputs.put(node.getName(), Optional.ofNullable(output));
+                    return output;
                 }
                 nodeOutputs.put(node.getName(), Optional.ofNullable(output));
                 return output;
@@ -216,9 +216,9 @@ public class ParallelExecutor {
                             throw new CompletionException(e);
                         }
                         // continue graph but preserve error
-                    	NodeFailure failure = new NodeFailure(node.getName(), e);
-                        nodeOutputs.put(node.getName(), Optional.ofNullable(failure));
-                        return failure;
+                    	nodeFailures.put(node.getName(), e);
+                        nodeOutputs.put(node.getName(), Optional.ofNullable(e));
+                        return e;
                     }
                     
                     case SKIP_FAILED -> {
@@ -231,28 +231,35 @@ public class ParallelExecutor {
             	if (isIO) limiter.release();
             }           
         }, runtime.getExecutor()).thenCompose(output -> {
-            if (output == null) {
-                inProgress.remove(node);
-                return CompletableFuture.completedFuture(null);
-            }
-            if (output instanceof NodeFailure failure) {
+            Throwable failure = nodeFailures.get(node.getName());
+            if (failure != null) {
                 context.getLogger().warning(
-                    "[DAG] Node failed but continuing: " + failure.nodeName()
+                    "[DAG] Node failed but continuing: " + node.getName()
                 );
             }
-            if (output instanceof BranchNode.RoutedResult routed) {
-                NodePlugin<?, ?> target = graph.findNodeByName(routed.nextNode());
-                CompletableFuture<Void> branch = executeNodeAsync(target, routed.output(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures);
+            if (node.unwrap() instanceof io.oxyjen.graph.branching.BranchNode<?>) {
+                String nextNode = context.getMetadata(io.oxyjen.graph.branching.BranchNode.ROUTE_KEY_PREFIX + node.getName());
+                if (nextNode == null) {
+                    inProgress.remove(node);
+                    return CompletableFuture.completedFuture(null);
+                }
+                NodePlugin<?, ?> target = graph.findNodeByName(nextNode);
+                CompletableFuture<Void> branch = executeNodeAsync(target, output, graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures);
                 CompletableFuture<Void> composed = branch.thenRun(() -> inProgress.remove(node));
                 allFutures.add(composed);
                 return composed;
             }
-            if (output instanceof RouterNode.RoutedResult routed) {
+            if (output == null) {
+                inProgress.remove(node);
+                return CompletableFuture.completedFuture(null);
+            }
+            if (node.unwrap() instanceof RouterNode) {
+                Map<String, Object> routes = (Map<String, Object>) output;
             	List<CompletableFuture<Void>> routerFutures = new ArrayList<>();
-                for (Map.Entry<String, Object> entry : routed.routes().entrySet()) {
+                for (Map.Entry<String, Object> entry : routes.entrySet()) {
                     NodePlugin<?, ?> target = graph.findNodeByName(entry.getKey());
                     if (scheduled.add(target.getName())) {
-                        routerFutures.add(executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures));
+                        routerFutures.add(executeNodeAsync(target, entry.getValue(), graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures));
                     }
                 }
                 
@@ -260,12 +267,12 @@ public class ParallelExecutor {
                     if (edge instanceof FailureEdge || edge instanceof CyclicEdge) continue;
                     if (edge instanceof RouteEdge) continue; // handled by routes map above
                     NodePlugin<?, ?> target = edge.getTarget();
-                    if (routed.routes().containsKey(target.getName())) continue; // already handled above
+                    if (routes.containsKey(target.getName())) continue; // already handled above
                     // direct edge targets from RouterNode are always unique and should always execute
                     scheduled.add(target.getName()); // mark as scheduled
                     routerFutures.add(executeNodeAsync(
                     	target, input, graph, context,
-                    	nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures
+                    	nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures
                     ));
                 }
                 if (!routerFutures.isEmpty()) {
@@ -284,14 +291,14 @@ public class ParallelExecutor {
                 if (!(edge instanceof CyclicEdge)) {
                     continue;
                 }
-                boolean decision = (output instanceof NodeFailure failure)
+                boolean decision = (failure != null)
                         ? edge.shouldTraverseFailure(failure, context)
                         : edge.shouldTraverse(output, context);
                 if (!decision) continue;
                 NodePlugin<?, ?> target = edge.getTarget();
                 traversedCycle = true;
                 downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures)
                 );
             }
             if (!traversedCycle) {
@@ -299,24 +306,28 @@ public class ParallelExecutor {
                 if (edge instanceof CyclicEdge) {
                     continue;
                 }
-                boolean decision = (output instanceof NodeFailure failure)
+                boolean decision = (failure != null)
                         ? edge.shouldTraverseFailure(failure, context)
                         : edge.shouldTraverse(output, context);
                 if (!decision) continue;
                 NodePlugin<?, ?> target = edge.getTarget();
                 NodePlugin<?, ?> actualTarget = target.unwrap();
                 if (actualTarget instanceof MergeNode merge && !(node.unwrap() instanceof MergeNode)) {
-                    merge.contribute(node.getName(), output, context);
+                    if (failure != null) {
+                        merge.contributeFailure(node.getName(), failure, context);
+                    } else {
+                        merge.contribute(node.getName(), output, context);
+                    }
                     if (scheduled.add(merge.getName())) {
                         downstream.add(
-                            executeNodeAsync(target, null, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                            executeNodeAsync(target, null, graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures)
                         );
                     }
                     continue;
                 }
                 //if (!decision) continue;
                 downstream.add(
-                    executeNodeAsync(target, output, graph, context, nodeOutputs, inProgress, scheduled, cyclicTargets, allFutures)
+                    executeNodeAsync(target, output, graph, context, nodeOutputs, nodeFailures, inProgress, scheduled, cyclicTargets, allFutures)
                 );
             }
             }
