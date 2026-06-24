@@ -232,6 +232,7 @@ public final class RetryPolicy {
          * Backward-compatible alias for baseBackoff.
          * Rate-limit retries now use the same backoff path as other transient failures.
          */
+        @Deprecated
         public Builder rateLimitBackoff(Duration duration) {
             return baseBackoff(duration);
         }
