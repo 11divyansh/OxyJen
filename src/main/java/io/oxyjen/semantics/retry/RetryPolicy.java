@@ -6,8 +6,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-import io.oxyjen.core.NodeContext;
 import io.oxyjen.llm.exceptions.RateLimitException;
+import io.oxyjen.llm.exceptions.TimeoutException;
 
 /**
  * Retry policy for graph-level retry wrappers.
@@ -18,9 +18,14 @@ import io.oxyjen.llm.exceptions.RateLimitException;
  */
 public final class RetryPolicy {
 
+    /**
+     * maxAttempts is the total number of tries, not the number of retries.
+     * Example: maxAttempts=3 means attempt 1 + attempt 2 + attempt 3.
+     */
     private final int maxAttempts;
     private final long baseBackoffMs;
     private final long maxBackoffMs;
+    private final long rateLimitBackoffMs;
     private final boolean exponential;
     private final double jitterFactor;
     private final Set<Class<? extends Throwable>> retryables;
@@ -30,6 +35,7 @@ public final class RetryPolicy {
         this.maxAttempts = builder.maxAttempts;
         this.baseBackoffMs = builder.baseBackoffMs;
         this.maxBackoffMs = builder.maxBackoffMs;
+        this.rateLimitBackoffMs = builder.rateLimitBackoffMs;
         this.exponential = builder.exponential;
         this.jitterFactor = builder.jitterFactor;
         this.retryables = Collections.unmodifiableSet(new LinkedHashSet<>(builder.retryables));
@@ -49,13 +55,24 @@ public final class RetryPolicy {
     }
 
     public static RetryPolicy defaultPolicy() {
-        return builder().build();
+        return builder()
+                .retryOn(
+                        RateLimitException.class,
+                        TimeoutException.class,
+                        java.util.concurrent.TimeoutException.class,
+                        java.net.http.HttpTimeoutException.class,
+                        java.net.ConnectException.class,
+                        java.net.SocketTimeoutException.class
+                )
+                .failOn(IllegalArgumentException.class, IllegalStateException.class)
+                .rateLimitBackoff(Duration.ofSeconds(30))
+                .build();
     }
 
     /**
      * Evaluate a failure and decide whether to retry plus how long to wait.
      */
-    public Decision decide(Throwable failure, int attempt, NodeContext context) {
+    public Decision decide(Throwable failure, int attempt) {
         if (failure == null) {
             return Decision.noRetry();
         }
@@ -66,8 +83,10 @@ public final class RetryPolicy {
             return Decision.noRetry();
         }
 
-        long retryAfterMs = extractRetryAfter(failure);
-        long delayMs = retryAfterMs > 0 ? retryAfterMs : calculateBackoff(attempt);
+        long delayMs = retryAfterMs(failure);
+        if (delayMs <= 0) {
+            delayMs = calculateBackoff(failure, attempt);
+        }
         return Decision.retry(delayMs);
     }
 
@@ -78,16 +97,11 @@ public final class RetryPolicy {
         if (failure instanceof Error) {
             return false;
         }
-        for (Class<? extends Throwable> type : failFast) {
-            if (type.isAssignableFrom(failure.getClass())) {
-                return false;
-            }
+        if (isFailFast(failure)) {
+            return false;
         }
         if (retryables.isEmpty()) {
-            if (failure instanceof IllegalArgumentException || failure instanceof IllegalStateException) {
-                return false;
-            }
-            return failure instanceof Exception;
+            return false;
         }
         for (Class<? extends Throwable> type : retryables) {
             if (type.isAssignableFrom(failure.getClass())) {
@@ -98,14 +112,20 @@ public final class RetryPolicy {
     }
 
     public long calculateBackoff(int attempt) {
+        return calculateBackoff(null, attempt);
+    }
+
+    public long calculateBackoff(Throwable failure, int attempt) {
         if (attempt < 1) {
             return 0L;
         }
-        long delay = exponential
-                ? baseBackoffMs * (1L << Math.max(0, attempt - 1))
-                : baseBackoffMs;
-        if (delay < 0) {
-            delay = Long.MAX_VALUE;
+        long delay;
+        if (failure instanceof RateLimitException) {
+            delay = saturatingMultiply(rateLimitBackoffMs, attempt);
+        } else {
+            delay = exponential
+                    ? saturatingMultiply(baseBackoffMs, 1L << Math.min(Math.max(0, attempt - 1), 30))
+                    : baseBackoffMs;
         }
         if (maxBackoffMs > 0) {
             delay = Math.min(delay, maxBackoffMs);
@@ -118,7 +138,29 @@ public final class RetryPolicy {
         return delay;
     }
 
-    private long extractRetryAfter(Throwable failure) {
+    private long saturatingMultiply(long left, long right) {
+        if (left <= 0 || right <= 0) {
+            return 0L;
+        }
+        if (left > Long.MAX_VALUE / right) {
+            return Long.MAX_VALUE;
+        }
+        return left * right;
+    }
+
+    public boolean isFailFast(Throwable failure) {
+        if (failure == null) {
+            return false;
+        }
+        for (Class<? extends Throwable> type : failFast) {
+            if (type.isAssignableFrom(failure.getClass())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public long retryAfterMs(Throwable failure) {
         if (failure instanceof RateLimitException rle && rle.hasRetryAfter()) {
             return rle.getRetryAfterMs();
         }
@@ -157,6 +199,7 @@ public final class RetryPolicy {
         private int maxAttempts = 3;
         private long baseBackoffMs = Duration.ofMillis(250).toMillis();
         private long maxBackoffMs = Duration.ofSeconds(30).toMillis();
+        private long rateLimitBackoffMs = Duration.ofSeconds(30).toMillis();
         private boolean exponential = true;
         private double jitterFactor = 0.0;
         private final Set<Class<? extends Throwable>> retryables = new LinkedHashSet<>();
@@ -192,6 +235,14 @@ public final class RetryPolicy {
 
         public Builder maxDelay(Duration duration) {
             return maxBackoff(duration);
+        }
+
+        public Builder rateLimitBackoff(Duration duration) {
+            if (duration == null || duration.isNegative()) {
+                throw new IllegalArgumentException("rateLimitBackoff must be non-negative");
+            }
+            this.rateLimitBackoffMs = duration.toMillis();
+            return this;
         }
 
         public Builder exponential() {
