@@ -25,7 +25,6 @@ public final class RetryPolicy {
     private final int maxAttempts;
     private final long baseBackoffMs;
     private final long maxBackoffMs;
-    private final long rateLimitBackoffMs;
     private final boolean exponential;
     private final double jitterFactor;
     private final Set<Class<? extends Throwable>> retryables;
@@ -35,7 +34,6 @@ public final class RetryPolicy {
         this.maxAttempts = builder.maxAttempts;
         this.baseBackoffMs = builder.baseBackoffMs;
         this.maxBackoffMs = builder.maxBackoffMs;
-        this.rateLimitBackoffMs = builder.rateLimitBackoffMs;
         this.exponential = builder.exponential;
         this.jitterFactor = builder.jitterFactor;
         this.retryables = Collections.unmodifiableSet(new LinkedHashSet<>(builder.retryables));
@@ -65,7 +63,6 @@ public final class RetryPolicy {
                         java.net.SocketTimeoutException.class
                 )
                 .failOn(IllegalArgumentException.class, IllegalStateException.class)
-                .rateLimitBackoff(Duration.ofSeconds(30))
                 .build();
     }
 
@@ -119,14 +116,9 @@ public final class RetryPolicy {
         if (attempt < 1) {
             return 0L;
         }
-        long delay;
-        if (failure instanceof RateLimitException) {
-            delay = saturatingMultiply(rateLimitBackoffMs, attempt);
-        } else {
-            delay = exponential
-                    ? saturatingMultiply(baseBackoffMs, 1L << Math.min(Math.max(0, attempt - 1), 30))
-                    : baseBackoffMs;
-        }
+        long delay = exponential
+                ? saturatingMultiply(baseBackoffMs, 1L << Math.min(Math.max(0, attempt - 1), 30))
+                : baseBackoffMs;
         if (maxBackoffMs > 0) {
             delay = Math.min(delay, maxBackoffMs);
         }
@@ -199,7 +191,6 @@ public final class RetryPolicy {
         private int maxAttempts = 3;
         private long baseBackoffMs = Duration.ofMillis(250).toMillis();
         private long maxBackoffMs = Duration.ofSeconds(30).toMillis();
-        private long rateLimitBackoffMs = Duration.ofSeconds(30).toMillis();
         private boolean exponential = true;
         private double jitterFactor = 0.0;
         private final Set<Class<? extends Throwable>> retryables = new LinkedHashSet<>();
@@ -237,12 +228,12 @@ public final class RetryPolicy {
             return maxBackoff(duration);
         }
 
+        /**
+         * Backward-compatible alias for baseBackoff.
+         * Rate-limit retries now use the same backoff path as other transient failures.
+         */
         public Builder rateLimitBackoff(Duration duration) {
-            if (duration == null || duration.isNegative()) {
-                throw new IllegalArgumentException("rateLimitBackoff must be non-negative");
-            }
-            this.rateLimitBackoffMs = duration.toMillis();
-            return this;
+            return baseBackoff(duration);
         }
 
         public Builder exponential() {
