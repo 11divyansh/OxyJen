@@ -24,6 +24,10 @@ import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.LLM;
 import io.oxyjen.llm.LLMChain;
 import io.oxyjen.llm.LLMNode;
+import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
+import io.oxyjen.llm.exceptions.NetworkException;
+import io.oxyjen.llm.exceptions.RateLimitException;
+import io.oxyjen.llm.exceptions.TimeoutException;
 import io.oxyjen.llm.prompts.PromptTemplate;
 import io.oxyjen.llm.prompts.Variable;
 import io.oxyjen.llm.schema.SchemaGenerator;
@@ -31,6 +35,7 @@ import io.oxyjen.llm.schema.SchemaNode;
 import io.oxyjen.llm.transport.gemini.GeminiChatModel;
 import io.oxyjen.resilience.ratelimit.RateLimiter;
 import io.oxyjen.resilience.ratelimit.RateLimiters;
+import io.oxyjen.semantics.retry.RetryPolicy;
 
 public class BatchDocumentExtraction {
 
@@ -186,21 +191,33 @@ public class BatchDocumentExtraction {
 	}
 	
 	public static ChatModel buildChain(String apiKey, String modelName, RateLimiter limiter) {
-		ChatModel model = LLM.gemini(modelName, apiKey);
-		if(model instanceof GeminiChatModel gemini) {
-			model =  gemini.withTemperature(0.0).withMaxTokens(4096);
-		}
-		model = LLM.withRateLimit(model, limiter);
-		LLMChain chain = LLMChain.builder()
-	            .primary(model)
-	            .retry(3)
-	            .timeout(Duration.ofSeconds(90))
-	            .exponentialBackoff()
+	    ChatModel model = LLM.gemini(modelName, apiKey);
+	    if (model instanceof GeminiChatModel gemini) {
+	        model = gemini.withTemperature(0.0).withMaxTokens(4096);
+	    }
+	    model = LLM.withRateLimit(model, limiter);
+
+	    RetryPolicy retryPolicy = RetryPolicy.builder()
+	            .maxAttempts(3)
+	            .baseBackoff(Duration.ofSeconds(1))
+	            .exponential()
 	            .maxBackoff(Duration.ofSeconds(60))
 	            .jitter(0.15)
+	            .retryOn(
+	                RateLimitException.class,
+	                NetworkException.class,
+	                TimeoutException.class
+	            )
+	            .failOn(InvalidAPIKeyException.class)
 	            .build();
-		return chain;
-	} 
+
+	    LLMChain chain = LLMChain.builder()
+	            .primary(model)
+	            .retryPolicy(retryPolicy)
+	            .timeout(Duration.ofSeconds(90))
+	            .build();
+	    return chain;
+	}
 	
 	private static String requireEnv(String name){
 	    String value = System.getenv(name);
