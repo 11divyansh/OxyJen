@@ -47,6 +47,8 @@ Use these files as copy-paste starting points. They are intentionally small and 
 
 ### Resilience
 - `resilience/01_timeout_and_retry.java`
+- `resilience/02_llmchain_with_limiter.java`
+- `resilience/03_llmchain_with_retrypolicy.java`
 
 ### JSON Schema
 - `jsonschema/01_manual_schema_builder.java`
