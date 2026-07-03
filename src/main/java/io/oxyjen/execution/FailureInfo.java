@@ -2,6 +2,7 @@ package io.oxyjen.execution;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Objects;
 
 /**
  * Structured information about a node failure.
@@ -18,13 +19,14 @@ import java.io.StringWriter;
  *                    if stack capture is disabled for performance reasons
  */
 public record FailureInfo(
-        String type,
+        String exceptionType,
         String message,
         String stackTrace
 ) {
 
     /** Builds a {@link FailureInfo} from a live {@link Throwable}, capturing its full stack trace. */
     public static FailureInfo from(Throwable t) {
+    	Objects.requireNonNull(t);
         StringWriter sw = new StringWriter();
         t.printStackTrace(new PrintWriter(sw));
         return new FailureInfo(t.getClass().getName(), t.getMessage(), sw.toString());
