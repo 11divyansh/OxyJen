@@ -18,7 +18,7 @@ import io.oxyjen.execution.metrics.NodeMetrics;
  * <p>Because OxyJen workflows are deterministic (the graph controls execution,
  * not the LLM), the same workflow run with the same input produces the same
  * event sequence every time. That property is what makes {@code replay} and
- * {@code diff} meaningful — they are not reconstructing emergent agent behavior,
+ * {@code diff} meaningful, they are not reconstructing emergent agent behavior,
  * they are replaying a deterministic record.
  *
  * <p>Every event carries {@code executionId} (the workflow run) and {@code at}
@@ -50,11 +50,21 @@ public sealed interface ExecutionEvent {
      * }
      * }</pre>
      */
-    sealed interface NodeEvent extends ExecutionEvent {
-        /** Identifier of the node this event is scoped to. */
-        String nodeId();
+    public sealed interface NodeEvent extends ExecutionEvent permits
+        NodeStarted,
+        NodeCompleted,
+        NodeFailed,
+        RetryAttempt,
+        NodeSkipped,
+        BranchTaken,
+        ParallelStarted,
+        ParallelCompleted,
+        CheckpointCreated,
+        CheckpointRestored,
+        ChunkGenerated {
+/** Identifier of the node this event is scoped to. */
+    	String nodeId();
     }
-
     /**
      * Emitted once, when a workflow execution begins.
      *
@@ -65,6 +75,8 @@ public sealed interface ExecutionEvent {
             String executionId,
             Instant at,
             String workflowId,
+            // TODO v1: replace with ExecutionContextSnapshot once replay/checkpoint
+            // serialization is introduced
             Map<String, Object> input
     ) implements ExecutionEvent {}
 
@@ -82,11 +94,18 @@ public sealed interface ExecutionEvent {
             Instant at,
             ExecutionStatus status,
             long durationMs
-    ) implements ExecutionEvent {}
+    ) implements ExecutionEvent {
+    	public WorkflowFinished {
+            if (status != ExecutionStatus.COMPLETED && status != ExecutionStatus.FAILED) {
+                throw new IllegalArgumentException(
+                        "WorkflowFinished requires COMPLETED or FAILED status, got: " + status);
+            }
+        }
+    }
 
     /**
      * Emitted when a workflow execution is explicitly cancelled before reaching
-     * a terminal node — distinct from {@link #WorkflowFinished} because the
+     * a terminal node, distinct from {@link #WorkflowFinished} because the
      * cause matters for replay and operability (manual cancel vs. timeout vs.
      * shutdown vs. a parent execution cancelling its children).
      *
@@ -231,4 +250,90 @@ public sealed interface ExecutionEvent {
             String nodeId,
             String routeKey
     ) implements NodeEvent {}
+    
+    /**
+    * Emitted when a parallel region of the graph (ParallelNode, MapNode,
+    * GatherNode fanout, ForEachNode, etc.) begins.
+    *
+    * @param nodeId     the node initiating the parallel region
+    * @param taskCount  number of concurrent tasks being started — named
+    *                   generically rather than "branchCount" since not every
+    *                   parallel node type creates graph branches (e.g. MapNode
+    *                   and ForEachNode fan out over data, not edges)
+    */
+   record ParallelStarted(
+           String executionId,
+           Instant at,
+           String nodeId,
+           int taskCount
+   ) implements NodeEvent {}
+
+   /**
+    * Emitted when a parallel region completes — all tasks have either
+    * finished or been aggregated (e.g. by GatherNode).
+    *
+    * @param nodeId      the node that initiated the parallel region
+    * @param succeeded   number of tasks that completed successfully
+    * @param failed      number of tasks that failed
+    * @param durationMs  wall-clock duration of the parallel region
+    */
+   record ParallelCompleted(
+           String executionId,
+           Instant at,
+           String nodeId,
+           int succeeded,
+           int failed,
+           long durationMs
+   ) implements NodeEvent {}
+
+   /**
+    * Emitted when execution state is durably checkpointed. This does
+    * <b>not</b> imply execution paused, periodic checkpointing of a
+    * long-running workflow can happen while it keeps progressing. For an
+    * actual pause, see {@link ExecutionSuspended}.
+    *
+    * @param nodeId  the node at which the checkpoint was taken
+    */
+   record CheckpointCreated(
+           String executionId,
+           Instant at,
+           String nodeId
+   ) implements NodeEvent {}
+
+   /**
+    * Emitted when a previously-saved checkpoint is loaded back into a live
+    * execution — typically as part of {@code replay.fromCheckpoint()} or
+    * when resuming a suspended workflow.
+    *
+    * @param nodeId  the node the checkpoint was restored at
+    */
+   record CheckpointRestored(
+           String executionId,
+           Instant at,
+           String nodeId
+   ) implements NodeEvent {}
+
+   /**
+    * Emitted for each chunk produced by a streaming LLM node. High-frequency
+    * compared to other event types, exporters and stores that don't care
+    * about chunk-level detail should filter these out rather than persist
+    * every one.
+    *
+    * <p>Named {@code chunk} rather than {@code token} deliberately: providers
+    * don't stream at consistent granularity. OpenAI may stream sub-word
+    * fragments, Claude tends to stream larger pieces, Gemini may stream whole
+    * sentences, and some providers stream structured JSON fragments rather
+    * than text at all. "Chunk" makes no claim about granularity.
+    *
+    * @param nodeId  the streaming node producing chunks
+    * @param chunk   the text (or structured-fragment) chunk
+    * @param index   0-indexed position of this chunk within the stream
+    */
+   record ChunkGenerated(
+           String executionId,
+           Instant at,
+           String nodeId,
+           String chunk,
+           int index
+   ) implements NodeEvent {}
 }
