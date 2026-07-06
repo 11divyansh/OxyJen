@@ -269,7 +269,7 @@ public sealed interface ExecutionEvent {
    ) implements NodeEvent {}
 
    /**
-    * Emitted when a parallel region completes — all tasks have either
+    * Emitted when a parallel region completes, all tasks have either
     * finished or been aggregated (e.g. by GatherNode).
     *
     * @param nodeId      the node that initiated the parallel region
