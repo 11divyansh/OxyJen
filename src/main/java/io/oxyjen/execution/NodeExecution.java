@@ -2,6 +2,7 @@ package io.oxyjen.execution;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import io.oxyjen.execution.metrics.NodeMetrics;
@@ -48,8 +49,20 @@ public record NodeExecution(
         NodeStatus status,
         int attempts,
         Optional<NodeMetrics> metrics,
-        List<FailureRecord> failures
+        List<AttemptFailure> failures
 ) {
+	
+	public NodeExecution {
+        Objects.requireNonNull(executionId, "executionId must not be null");
+        Objects.requireNonNull(nodeId, "nodeId must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+
+        if (attempts < 0) {
+            throw new IllegalArgumentException("attempts must be >= 0");
+        }
+
+        failures = List.copyOf(Objects.requireNonNull(failures, "failures must not be null"));
+    }
 
     /**
      * Details of a single failed attempt for this node.
@@ -58,7 +71,7 @@ public record NodeExecution(
      * @param failure  structured failure details (type, message, stack trace)
      * @param at       when the failure occurred
      */
-    public record FailureRecord(
+    public record AttemptFailure(
             int attempt,
             FailureInfo failure,
             Instant at
@@ -72,5 +85,17 @@ public record NodeExecution(
     /** True if this node was never executed because its branch/guard wasn't taken. */
     public boolean wasSkipped() {
         return status == NodeStatus.SKIPPED;
+    }
+    
+    public boolean isRunning() {
+        return status == NodeStatus.RUNNING;
+    }
+
+    public boolean isCompleted() {
+        return status == NodeStatus.COMPLETED;
+    }
+
+    public boolean hasFailures() {
+        return !failures.isEmpty();
     }
 }
