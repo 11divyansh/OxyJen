@@ -43,7 +43,7 @@ public final class ObservationBus {
      *
      * @param listener  the listener to add; must not be {@code null}
      */
-    public void addListener(ObservationListener listener) {
+    public void register(ObservationListener listener) {
         if (listener == null) throw new IllegalArgumentException("listener must not be null");
         listeners.add(listener);
     }
@@ -54,7 +54,7 @@ public final class ObservationBus {
      *
      * @param listener  the listener to remove
      */
-    public void removeListener(ObservationListener listener) {
+    public void unregister(ObservationListener listener) {
         listeners.remove(listener);
     }
 
