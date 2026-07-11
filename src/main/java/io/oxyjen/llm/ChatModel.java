@@ -5,8 +5,11 @@ package io.oxyjen.llm;
  * 
  * This is the ROOT abstraction. Everything else exists to produce a ChatModel.
  * 
- * Just: input string → output string
- * Keeping it boring
+ * 
+ * <p><b>Migration from v0.5:</b> implementations that previously returned
+ * {@code String} should wrap their response in {@link LLMResponse#of(String)}
+ * as a minimal migration, then add token/cost fields as the provider API
+ * exposes them.
  */
 public interface ChatModel {
     
@@ -21,5 +24,5 @@ public interface ChatModel {
      * @param input The input string
      * @return The model's response
      */
-    String chat(String input);
+    LLMResponse chat(String input);
 }
