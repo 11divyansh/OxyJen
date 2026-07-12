@@ -1,10 +1,16 @@
 package io.oxyjen.llm;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.Semaphore;
 
 import io.oxyjen.core.Memory;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.FailureInfo;
+import io.oxyjen.execution.metrics.NodeMetrics;
+import io.oxyjen.observe.ObservationBus;
 
 /**
  * LLM as a first-class graph node.
@@ -41,6 +47,13 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
     @Override
     public String process(String input, NodeContext context) {
         Semaphore runtimeLimiter = acquireRuntimeLimiterIfNested(context);
+        String executionId = context.getMetadata("executionId");
+        ObservationBus bus = context.getRuntime() != null
+                ? context.getRuntime().observationBus()
+                : null;
+ 
+        Instant start = Instant.now();
+        int attempt = resolveAttempt(context);
         try {
             Memory memory = context.memory(memoryName);
             
@@ -48,12 +61,49 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
             memory.append("user", input);
             
             // 2. Call model
-            String response = model.chat(input);
+            LLMResponse response = model.chat(input);
             
             // 3. Store assistant response
             memory.append("assistant", response);
             
-            return response;
+            Duration duration = Duration.between(start, Instant.now());
+            
+            // emit NodeCompleted with LlmNodeMetrics
+            // This overrides the BasicNodeMetrics the executor emits for generic
+            // nodes. LLMNode is the only node that knows provider/token/cost info,
+            // so it owns emitting the richer metrics variant.
+            if (bus != null && !bus.isEmpty() && executionId != null) {
+                bus.emit(new ExecutionEvent.NodeCompleted(
+                        executionId,
+                        Instant.now(),
+                        getName(),
+                        new NodeMetrics.LlmNodeMetrics(
+                                duration,
+                                response.promptTokens(),
+                                response.completionTokens(),
+                                response.costMicros(),
+                                response.modelInfo(),
+                                null,           // outputValid — set by SchemaNode, not here
+                                attempt - 1,    // retryCount = attempts made before this success
+                                null,           // toolCalls — set by ToolNode when tool use is added
+                                response.cacheHit()
+                        )
+                ));
+            }
+            
+            return response.text();
+        } catch(Exception e) {
+        	// emit NodeFailed
+            if (bus != null && !bus.isEmpty() && executionId != null) {
+                bus.emit(new ExecutionEvent.NodeFailed(
+                        executionId,
+                        Instant.now(),
+                        getName(),
+                        FailureInfo.from(e),
+                        attempt
+                ));
+            }
+            throw e instanceof RuntimeException re ? re : new RuntimeException(e);
         } finally {
             releaseRuntimeLimiter(runtimeLimiter);
         }
@@ -120,6 +170,16 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
             }
             return new LLMNode(model, memoryName);
         }
+    }
+    
+    /**
+     * Reads the current attempt number from context metadata, defaulting to 1.
+     * RetryNode increments this before each attempt so the emitted events
+     * carry the correct attempt number.
+     */
+    private int resolveAttempt(NodeContext context) {
+        Object attempt = context.getMetadata("attempt:" + getName());
+        return attempt instanceof Integer i ? i : 1;
     }
 
     private Semaphore acquireRuntimeLimiterIfNested(NodeContext context) {
