@@ -1,9 +1,14 @@
 package io.oxyjen.llm.schema;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import io.oxyjen.execution.metrics.NodeMetrics;
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
+import io.oxyjen.llm.models.ModelInfo;
 import io.oxyjen.llm.schema.FieldError.ErrorType;
 import io.oxyjen.util.JsonParser;
 import io.oxyjen.util.JsonSerializer;
@@ -16,6 +21,12 @@ import io.oxyjen.util.JsonSerializer;
  * 2. Validate response
  * 3. If invalid, retry with error feedback
  * 4. Max retries before giving up
+ * 
+ * <p>Token counts and cost are aggregated across all attempts each retry is
+ * a real LLM call that consumes tokens and costs money. The aggregated
+ * {@link NodeMetrics.LlmNodeMetrics} is returned inside {@link SchemaResult}
+ * so {@code SchemaNode} can emit an accurate
+ * {@link io.oxyjen.execution.ExecutionEvent.NodeCompleted}.
  */
 public final class SchemaEnforcer {
     
@@ -52,14 +63,36 @@ public final class SchemaEnforcer {
         String currentPrompt = buildInitialPrompt(prompt);      
         String lastResponse = null;
         List<FieldError> lastErrors = List.of();
+        
+     // Metrics aggregated across all attempts
+        Instant executionStart = Instant.now();
+        long totalPromptTokens = 0;
+        long totalCompletionTokens = 0;
+        long totalCostMicros = 0;
+        ModelInfo modelInfo = null;   // taken from first response that has it
+        boolean promptTokensKnown = false;
+        boolean completionTokensKnown = false;
               
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            String response = model.chat(currentPrompt);
-            lastResponse = response;
+            LLMResponse response = model.chat(currentPrompt);
+            lastResponse = response.text();
+            
+            if (response.promptTokens() != null) {
+                totalPromptTokens += response.promptTokens();
+                promptTokensKnown = true;
+            }
+            if (response.completionTokens() != null) {
+                totalCompletionTokens += response.completionTokens();
+                completionTokensKnown = true;
+            }
+            totalCostMicros += response.costMicros();
+            if (modelInfo == null && response.modelInfo() != null) {
+                modelInfo = response.modelInfo();
+            }
             
             String json;
             try {
-            	json = extractJSON(response);
+            	json = extractJSON(response.text());
             	json = stripUnknownFields(json, schema);
             } catch (Exception extractionError) {
             	lastErrors = List.of(
@@ -72,29 +105,58 @@ public final class SchemaEnforcer {
                         )
                     );
             	if (attempt == maxRetries && !failOnInvalid) {
-                    return new SchemaResult(response, false, lastErrors);
+                    return new SchemaResult(response.text(), false, lastErrors, buildMetrics(executionStart, totalPromptTokens, totalCompletionTokens, totalCostMicros, modelInfo, promptTokensKnown, completionTokensKnown, false));
                 }
             	currentPrompt = buildRetryPrompt(
             			prompt,
-            			response,
+            			response.text(),
             			"Could not extract valid JSON object from response.",
             			attempt);
             	continue;
             }
             SchemaValidator.ValidationResult result = validator.validate(json);          
             if (result.isValid()) {
-            	return new SchemaResult(json, true, List.of());
+            	return new SchemaResult(json, true, List.of(), buildMetrics(executionStart, totalPromptTokens, totalCompletionTokens, totalCostMicros, modelInfo, promptTokensKnown, completionTokensKnown, true));
             }           
             lastErrors = result.errors();
             currentPrompt = buildRetryPrompt(prompt, json, result.formatErrors(),attempt);
-        }       
+        } 
+        NodeMetrics.LlmNodeMetrics aggregatedMetrics = buildMetrics(
+                executionStart, totalPromptTokens, totalCompletionTokens,
+                totalCostMicros, modelInfo, promptTokensKnown, completionTokensKnown, false
+        );
         if (failOnInvalid) {
             throw new SchemaException(
                 "Failed to get valid JSON after " + maxRetries + " attempts",
                 lastResponse
             );
         }
-        return new SchemaResult(lastResponse, false, lastErrors);
+        return new SchemaResult(lastResponse, false, lastErrors, aggregatedMetrics);
+    }
+    
+    /**
+     * Builds the final {@link NodeMetrics.LlmNodeMetrics} from aggregated counters.
+     * Token fields are null if no provider in the chain reported them.
+     */
+    private NodeMetrics.LlmNodeMetrics buildMetrics(
+            Instant start,
+            long promptTokens,
+            long completionTokens,
+            long costMicros,
+            ModelInfo modelInfo,
+            boolean promptTokensKnown,
+            boolean completionTokensKnown,
+            boolean outputValid
+    ) {
+        return new NodeMetrics.LlmNodeMetrics(
+                Duration.between(start, Instant.now()),
+                promptTokensKnown ? promptTokens : null,
+                completionTokensKnown ? completionTokens : null,
+                costMicros,
+                modelInfo,
+                outputValid,
+                null    // toolCalls — not applicable to schema enforcement
+        );
     }
     
     private String buildInitialPrompt(String userPrompt) {

@@ -83,14 +83,11 @@ public final class LLMNode implements NodePlugin<String, String>, UsesRuntimeLim
                                 response.completionTokens(),
                                 response.costMicros(),
                                 response.modelInfo(),
-                                null,           // outputValid — set by SchemaNode, not here
-                                attempt - 1,    // retryCount = attempts made before this success
-                                null,           // toolCalls — set by ToolNode when tool use is added
-                                response.cacheHit()
+                                null,       // outputValid - set by SchemaNode, not here
+                                null        // toolCalls - set by ToolNode when tool use is added
                         )
                 ));
             }
-            
             return response.text();
         } catch(Exception e) {
         	// emit NodeFailed

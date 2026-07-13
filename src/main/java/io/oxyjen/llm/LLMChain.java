@@ -1,15 +1,19 @@
 package io.oxyjen.llm;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.FailureInfo;
 import io.oxyjen.llm.exceptions.InvalidAPIKeyException;
 import io.oxyjen.llm.exceptions.LLMException;
 import io.oxyjen.llm.exceptions.NetworkException;
 import io.oxyjen.llm.exceptions.RateLimitException;
 import io.oxyjen.llm.exceptions.TimeoutException;
 import io.oxyjen.llm.internal.TimedChatModel;
+import io.oxyjen.observe.ObservationBus;
 import io.oxyjen.resilience.ratelimit.RateLimitedChatModel;
 import io.oxyjen.semantics.retry.RetryPolicy;
 
@@ -39,12 +43,18 @@ import io.oxyjen.semantics.retry.RetryPolicy;
  * String response = resilient.chat("Hello");
  * // Auto-tries gpt-4o -> gpt-3.5-turbo if needed
  * </pre>
+ * 
+ * <p>Returns a full {@link LLMResponse} so callers (primarily {@code LLMNode})
+ * get token counts, cost, and provider metadata from whichever model in the
+ * chain actually produced the response including how many retries it took.
  */
 public final class LLMChain implements ChatModel {
 
     private final ChatModel primary;
     private final List<ChatModel> fallbacks;
     private final RetryPolicy retryPolicy;
+    private final ObservationBus bus;
+    private final String nodeId;
 
     private LLMChain(Builder builder) {
         if (builder.timeout != null) {
@@ -65,15 +75,28 @@ public final class LLMChain implements ChatModel {
         this.retryPolicy = builder.retryPolicy != null
                 ? builder.retryPolicy
                 : buildRetryPolicy(builder);
+        
+        this.bus = builder.bus;
+        this.nodeId = builder.nodeId;
+    }
+    
+    @Override 
+    public LLMResponse chat(String input) {
+    	return chat(input, null);
     }
 
-    @Override
-    public String chat(String input) {
+    /**
+     * Variant that accepts a per-call {@code executionId} used by
+     * {@code LLMNode} which resolves the executionId from {@code NodeContext}
+     * and passes it here so retry events carry the right correlation id.
+     */
+    public LLMResponse chat(String input, String executionId) {
         List<ChatModel> models = new ArrayList<>();
         models.add(primary);
         models.addAll(fallbacks);
 
         Exception lastException = null;
+        int totalRetries = 0;
 
         for (ChatModel model : models) {
             printDecoratorChain(model);
@@ -81,17 +104,47 @@ public final class LLMChain implements ChatModel {
             for (int attempt = 1; attempt <= retryPolicy.maxAttempts(); attempt++) {
                 try {
                     log("Attempt " + attempt + " with " + modelName(model));
-                    String response = model.chat(input);
+                    LLMResponse response = model.chat(input);
                     log("Success with " + modelName(model));
+                    // If the provider didn't fill in retryCount (it won't —
+                    // retryCount is a chain-level concept, not provider-level),
+                    // rebuild the response with the retry count we tracked here.
+                    // Only rebuild if retries actually occurred to avoid
+                    // unnecessary allocation on the happy path.
+                    if (totalRetries > 0) {
+                        return new LLMResponse(
+                                response.text(),
+                                response.promptTokens(),
+                                response.completionTokens(),
+                                response.costMicros(),
+                                response.modelInfo(),
+                                response.cacheHit()
+                        );
+                    }
                     return response;
                 } catch (Exception e) {
                     lastException = e;
+                    totalRetries++;
                     String reason = classifyReason(e);
                     log("Failed: " + e.getMessage() + " [reason=" + reason + "]");
 
                     RetryPolicy.Decision decision = retryPolicy.decide(e, attempt);
-                    if (decision.shouldRetry() && attempt < retryPolicy.maxAttempts()) {
-                        long backoffMs = decision.delayMs();
+                    boolean willRetry = decision.shouldRetry() && attempt < retryPolicy.maxAttempts();
+                    long backoffMs = willRetry ? decision.delayMs() : 0L;
+                    // emit RetryAttempt if bus is available
+                    if (willRetry && bus != null && !bus.isEmpty()) {
+                        String eid = executionId != null ? executionId : "unknown";
+                        String nid = nodeId != null ? nodeId : "LLMChain";
+                        bus.emit(new ExecutionEvent.RetryAttempt(
+                                eid,
+                                Instant.now(),
+                                nid,
+                                attempt + 1,
+                                FailureInfo.from(e),
+                                backoffMs
+                        ));
+                    }
+                    if (willRetry) {
                         log("Attempt " + (attempt + 1) + " reason=" + reason
                                 + " backoff=" + backoffMs + "ms");
                         sleep(backoffMs);
@@ -212,6 +265,8 @@ public final class LLMChain implements ChatModel {
         private Duration maxBackoff = null;
         private double jitterFactor = 0.0;
         private RetryPolicy retryPolicy = null;
+        private ObservationBus bus = null;
+        private String nodeId = null;
 
         /**
          * Set primary model (required).
@@ -314,6 +369,27 @@ public final class LLMChain implements ChatModel {
             this.jitterFactor = factor;
             return this;
         }
+        
+        /**
+        * Provide an {@link ObservationBus} so the chain can emit
+        * {@link ExecutionEvent.RetryAttempt} events instead of logging.
+        * Optional if not set, retries are silent at the chain level
+        * (node-level failure events are still emitted by the executor).
+        */
+       public Builder observationBus(ObservationBus bus) {
+           this.bus = bus;
+           return this;
+       }
+
+       /**
+        * Node identifier for retry events typically the containing
+        * {@code LLMNode}'s name. Only meaningful when {@link #observationBus}
+        * is also set.
+        */
+       public Builder nodeId(String nodeId) {
+           this.nodeId = nodeId;
+           return this;
+       }
 
         public LLMChain build() {
             if (primary == null) {

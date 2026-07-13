@@ -1,13 +1,18 @@
 package io.oxyjen.llm.schema;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
+import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.FailureInfo;
+import io.oxyjen.execution.metrics.NodeMetrics;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.LLM;
 import io.oxyjen.llm.UsesRuntimeLimiter;
+import io.oxyjen.observe.ObservationBus;
 import io.oxyjen.util.JsonMapper;
 import io.oxyjen.util.JsonParser;
 
@@ -39,6 +44,10 @@ public final class SchemaNode<T> implements NodePlugin<String, T>, UsesRuntimeLi
     @Override
     public T process(String input, NodeContext context) {
         Semaphore runtimeLimiter = acquireRuntimeLimiterIfNested(context);
+        String executionId = context.getMetadata("executionId");
+        ObservationBus bus = context.getRuntime() != null
+                ? context.getRuntime().observationBus()
+                : null;
         if (memoryKey != null) {
             context.memory(memoryKey).append("user", input);
         } 
@@ -49,6 +58,12 @@ public final class SchemaNode<T> implements NodePlugin<String, T>, UsesRuntimeLi
             }
             // Store schema result in context
             context.setMetadata("schemaResult", result);
+            // emit NodeCompleted with outputValid set
+            // SchemaNode is the only node that sets outputValid, LLMNode leaves
+            // it null because it has no visibility into schema validation.
+            // Metrics are aggregated across all schema-enforcement retries by
+            // SchemaEnforcer, so cost/tokens reflect the real total.
+            emitNodeCompleted(bus, executionId, result.getMetrics(), result.isValid());
             if (!result.isValid()) {
             	// store errors for graph-level decisions
             	context.setMetadata("schemaErrors", result.getErrors());
@@ -70,9 +85,50 @@ public final class SchemaNode<T> implements NodePlugin<String, T>, UsesRuntimeLi
                 }
                 return null; // soft-fail
             }
+        } catch (Exception e) {
+            if (bus != null && !bus.isEmpty() && executionId != null) {
+                bus.emit(new ExecutionEvent.NodeFailed(
+                        executionId,
+                        Instant.now(),
+                        getName(),
+                        FailureInfo.from(e),
+                        1
+                ));
+            }
+            throw e instanceof RuntimeException re ? re : new RuntimeException(e);
         } finally {
             releaseRuntimeLimiter(runtimeLimiter);
         }
+    }
+    
+    private void emitNodeCompleted(
+            ObservationBus bus,
+            String executionId,
+            NodeMetrics.LlmNodeMetrics metrics,
+            boolean outputValid
+    ) {
+        if (bus == null || bus.isEmpty() || executionId == null) return;
+ 
+        // If SchemaEnforcer returned metrics, use them with outputValid overlaid.
+        // If somehow metrics is null (e.g. test path), emit BasicNodeMetrics.
+        NodeMetrics finalMetrics = metrics != null
+                ? new NodeMetrics.LlmNodeMetrics(
+                        metrics.duration(),
+                        metrics.promptTokens(),
+                        metrics.completionTokens(),
+                        metrics.costMicros(),
+                        metrics.modelInfo(),
+                        outputValid,        // ← set here, not in SchemaEnforcer
+                        metrics.toolCalls()
+                  )
+                : NodeMetrics.GraphNodeMetrics.of(java.time.Duration.ZERO);
+ 
+        bus.emit(new ExecutionEvent.NodeCompleted(
+                executionId,
+                Instant.now(),
+                getName(),
+                finalMetrics
+        ));
     }
 
     private Semaphore acquireRuntimeLimiterIfNested(NodeContext context) {
