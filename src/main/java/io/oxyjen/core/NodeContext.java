@@ -282,6 +282,19 @@ public class NodeContext {
     }
 
     /**
+     * Removes metadata from this context's local scope only.
+     *
+     * <p>This does not walk up to parent contexts. It is intended for
+     * execution-scoped scratch keys that should not leak into later attempts.
+     *
+     * @param key metadata key to remove
+     * @return the removed value, or {@code null} if not present
+     */
+    public Object removeMetadata(String key) {
+        return metadata.remove(key);
+    }
+
+    /**
      * Retrieves metadata.
      */
     @SuppressWarnings("unchecked")
