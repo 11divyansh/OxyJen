@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
 import io.oxyjen.llm.exceptions.RateLimitException;
 
 /**
@@ -25,7 +26,7 @@ public final class RateLimitedChatModel implements ChatModel {
     }
 
     @Override
-    public String chat(String input) {
+    public LLMResponse chat(String input) {
     	String threadName = Thread.currentThread().getName();
     	long requestStart = System.currentTimeMillis();
     	System.out.println("[RateLimiter] " + threadName + " requesting permit");
@@ -48,8 +49,7 @@ public final class RateLimitedChatModel implements ChatModel {
             return delegate.chat(input);
         } catch (RateLimitException e) {
         	// tell the adaptive limiter about the block
-            if (rateLimiter instanceof AdaptiveRateLimiter adaptive
-                    ) {
+            if (rateLimiter instanceof AdaptiveRateLimiter adaptive) {
                 adaptive.on429(e.hasRetryAfter() ? e.getRetryAfterMs() : DEFAULT_429_COOLDOWN_MS);
             }
             throw e; // re-throw so LLMChain handles retry

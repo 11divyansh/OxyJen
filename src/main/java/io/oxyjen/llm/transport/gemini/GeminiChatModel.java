@@ -3,12 +3,11 @@ package io.oxyjen.llm.transport.gemini;
 import java.time.Duration;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
 import io.oxyjen.llm.models.ChatRequest;
 import io.oxyjen.llm.models.ChatResponse;
+import io.oxyjen.llm.models.ModelInfo;
 import io.oxyjen.llm.models.TokenUsage;
-import io.oxyjen.resilience.ratelimit.RateLimitedChatModel;
-import io.oxyjen.resilience.ratelimit.RateLimiter;
-import io.oxyjen.resilience.ratelimit.RateLimiters;
 
 /**
  * Gemini implementation of ChatModel.
@@ -56,7 +55,7 @@ public final class GeminiChatModel implements ChatModel {
     }
 
     @Override
-    public String chat(String input) {
+    public LLMResponse chat(String input) {
     	 ChatRequest.Builder requestBuilder = ChatRequest.builder()
     			 .model(model)
     			 .addMessage("user", input);
@@ -65,7 +64,15 @@ public final class GeminiChatModel implements ChatModel {
     	 	ChatRequest request = requestBuilder.build();
     	 	ChatResponse response = client.chat(request);
     	 	this.lastUsage = response.usage();
-    	 	return response.content();
+    	 	TokenUsage usage = response.usage();
+    	 	return new LLMResponse(
+    	 	        response.content(),
+    	 	        usage != null ? (long) usage.promptTokens() : null,
+    	 	        usage != null ? (long) usage.completionTokens() : null,
+    	 	        0L,
+    	 	        new ModelInfo("gemini", model, 0),
+    	 	        null
+    	 	);
     }
 
     public GeminiChatModel withTemperature(double temp) {

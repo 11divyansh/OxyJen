@@ -1,8 +1,10 @@
 package io.oxyjen.llm.transport.openai;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
 import io.oxyjen.llm.models.ChatRequest;
 import io.oxyjen.llm.models.ChatResponse;
+import io.oxyjen.llm.models.ModelInfo;
 import io.oxyjen.llm.models.TokenUsage;
 
 /**
@@ -46,7 +48,7 @@ public final class OpenAIChatModel implements ChatModel {
     }
     
     @Override
-    public String chat(String input) {
+    public LLMResponse chat(String input) {
         // Build request
         ChatRequest.Builder requestBuilder = ChatRequest.builder()
             .model(model)
@@ -67,8 +69,16 @@ public final class OpenAIChatModel implements ChatModel {
         // Store metadata for cost tracking
         this.lastUsage = response.usage();
         
-        // Return content
-        return response.content();
+        TokenUsage usage = response.usage();
+        ModelInfo modelInfo = new ModelInfo("openai", model, 0);
+        return new LLMResponse(
+                response.content(),
+                usage != null ? (long) usage.promptTokens() : null,
+                usage != null ? (long) usage.completionTokens() : null,
+                0L,
+                modelInfo,
+                null
+        );
     }
     
     // config method for v0.3+    

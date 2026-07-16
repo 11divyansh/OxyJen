@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
 import io.oxyjen.llm.exceptions.TimeoutException;
 
 public final class TimedChatModel implements ChatModel {
@@ -32,15 +33,15 @@ public final class TimedChatModel implements ChatModel {
     }
 	
 	@Override
-	public String chat(String input) {
+	public LLMResponse chat(String input) {
 		String threadName = Thread.currentThread().getName();
 	    System.out.println("[TimedChatModel] " + threadName + " starting call, timeout=" + timeout);
 
 	    long start = System.currentTimeMillis();
-		Future<String> future = SHARED_EXECUTOR.submit(() -> delegate.chat(input));
+		Future<LLMResponse> future = SHARED_EXECUTOR.submit(() -> delegate.chat(input));
 
         try {
-        	String result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        	LLMResponse result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             long elapsed = System.currentTimeMillis() - start;
             System.out.println("[TimedChatModel] " + threadName + " completed in " + elapsed + "ms");
             return result;
