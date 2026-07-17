@@ -9,7 +9,7 @@ public final class SchemaResult {
     private final String rawJson;
     private final boolean valid;
     private final List<FieldError> errors;
-    private NodeMetrics.LlmNodeMetrics metrics;
+    private final NodeMetrics.LlmNodeMetrics metrics;
 
     public SchemaResult(String rawJson, boolean valid, List<FieldError> errors, NodeMetrics.LlmNodeMetrics metrics) {
         this.rawJson = rawJson;

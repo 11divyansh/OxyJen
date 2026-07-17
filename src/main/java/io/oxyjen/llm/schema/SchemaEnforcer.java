@@ -25,7 +25,7 @@ import io.oxyjen.util.JsonSerializer;
  * <p>Token counts and cost are aggregated across all attempts each retry is
  * a real LLM call that consumes tokens and costs money. The aggregated
  * {@link NodeMetrics.LlmNodeMetrics} is returned inside {@link SchemaResult}
- * so {@code SchemaNode} can emit an accurate
+ * so the executor can emit an accurate
  * {@link io.oxyjen.execution.ExecutionEvent.NodeCompleted}.
  */
 public final class SchemaEnforcer {
@@ -64,7 +64,7 @@ public final class SchemaEnforcer {
         String lastResponse = null;
         List<FieldError> lastErrors = List.of();
         
-     // Metrics aggregated across all attempts
+        // Metrics aggregated across all attempts
         Instant executionStart = Instant.now();
         long totalPromptTokens = 0;
         long totalCompletionTokens = 0;
