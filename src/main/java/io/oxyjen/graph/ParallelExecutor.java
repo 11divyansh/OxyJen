@@ -21,6 +21,7 @@ import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
 import io.oxyjen.core.NodePlugin;
 import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.ExecutionMetadataKeys;
 import io.oxyjen.execution.ExecutionRuntime;
 import io.oxyjen.execution.ExecutionStatus;
 import io.oxyjen.execution.FailureInfo;
@@ -224,48 +225,47 @@ public class ParallelExecutor {
     	CompletableFuture<Void> future = CompletableFuture.<Object>supplyAsync(() -> {
     		Instant nodeStart = Instant.now();
             int attempt = 1;
+            String nodeId = node.getName();
  
             // emit NodeStarted
-            emit(bus, new ExecutionEvent.NodeStarted(executionId, nodeStart, node.getName(), attempt));
+            emit(bus, new ExecutionEvent.NodeStarted(executionId, nodeStart, nodeId, attempt));
+            ExecutionMetadataKeys.setCurrentNodeId(nodeId);
         	try {
-                context.getLogger().info("[DAG] Executing: " + node.getName());
+                context.getLogger().info("[DAG] Executing: " + nodeId);
                 actualNode.onStart(context);
                 Object output = actualNode.process(input, context);
                 actualNode.onFinish(context);
-                context.getLogger().info("[DAG] Completed: " + node.getName());
-                // emit NodeCompleted 
+                context.getLogger().info("[DAG] Completed: " + nodeId);
                 Duration duration = Duration.between(nodeStart, Instant.now());
+                NodeMetrics metrics = resolveNodeMetrics(context, nodeId, duration);
                 emit(bus, new ExecutionEvent.NodeCompleted(
                         executionId,
                         Instant.now(),
-                        node.getName(),
-                        NodeMetrics.GraphNodeMetrics.of(duration)
-                        // LlmNodeMetrics emitted by LLMNode itself via the bus —
-                        // the executor only knows generic node boundaries, not
-                        // LLM-specific timing/tokens which live inside LLMChain
+                        nodeId,
+                        metrics
                 ));
                 if (actualNode instanceof RouterNode) {
-                    nodeOutputs.put(node.getName(), Optional.ofNullable(output));
+                    nodeOutputs.put(nodeId, Optional.ofNullable(output));
                     return output;
                 }
-                nodeOutputs.put(node.getName(), Optional.ofNullable(output));
+                nodeOutputs.put(nodeId, Optional.ofNullable(output));
                 return output;
             } catch (Exception e) {
+            	context.removeMetadata(ExecutionMetadataKeys.nodeMetricsKey(nodeId));
             	// emit NodeFailed
                 emit(bus, new ExecutionEvent.NodeFailed(
                         executionId,
                         Instant.now(),
-                        node.getName(),
+                        nodeId,
                         FailureInfo.from(e),
                         attempt
                 ));
             	if (!(e instanceof MergeNode.MergeTimeoutException)) {
-            	    context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
+            	    context.getLogger().severe("[DAG] Error in node [" + nodeId + "]: " + e.getMessage());
                 }
-                //context.getLogger().severe("[DAG] Error in node [" + node.getName() + "]: " + e.getMessage());
                 try { context.getExceptionHandler().handleException(actualNode, e, context); } catch (Exception ignored) {}
                 try { actualNode.onError(e, context); } catch (Exception ignored) {}
-                context.setMetadata("failed:" + node.getName(), true);
+                context.setMetadata("failed:" + nodeId, true);
                 ExecutionRuntime runtime = context.getRuntime();
                 ExecutionRuntime.FailureMode mode = runtime.getFailureMode();
                 switch (mode) {
@@ -300,6 +300,7 @@ public class ParallelExecutor {
                 }
                 return null; // fallback
             } finally {
+            	ExecutionMetadataKeys.clearCurrentNodeId();
             	if (isIO) limiter.release();
             }           
         }, runtime.getExecutor()).thenCompose(output -> {
@@ -446,6 +447,14 @@ public class ParallelExecutor {
     	if (!bus.isEmpty()) {
     		bus.emit(event);
     	}
+    }
+
+    private NodeMetrics resolveNodeMetrics(NodeContext context, String nodeId, Duration fallbackDuration) {
+        Object stored = context.removeMetadata(ExecutionMetadataKeys.nodeMetricsKey(nodeId));
+        if (stored instanceof NodeMetrics metrics) {
+            return metrics;
+        }
+        return NodeMetrics.GraphNodeMetrics.of(fallbackDuration);
     }
     
     private Set<NodePlugin<?, ?>> findCyclicTargets(Graph graph) {
