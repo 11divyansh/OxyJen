@@ -1,6 +1,7 @@
 package io.oxyjen.llm.schema.tests;
 
 import io.oxyjen.llm.ChatModel;
+import io.oxyjen.llm.LLMResponse;
 
 public final class FakeModel implements ChatModel {
 
@@ -11,12 +12,12 @@ public final class FakeModel implements ChatModel {
         this.responses = responses;
     }
     @Override
-    public String chat(String prompt) {
+    public LLMResponse chat(String prompt) {
 
         if (index < responses.length) {
-            return responses[index++];
+            return LLMResponse.of(responses[index++]);
         }
-        return responses[responses.length - 1];
+        return LLMResponse.of(responses[responses.length - 1]);
     }
     public int callCount() {
         return index;

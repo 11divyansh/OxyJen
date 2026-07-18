@@ -1,0 +1,55 @@
+Role Description:
+About the role
+🌎 VISA SPONSORSHIP AVAILABLE!🌏
+
+JDs are always too long - we prefer to chat in person! However, here are the essentials:
+
+At SAMMY Labs we are building a foundational model for law. SAMMY AI compiles statutes, case law, regulator guidance, and our customers' own operating procedures into deterministic legal engines — evaluated through an app or one API call, in under 12ms, with full statutory provenance on every verdict.
+
+This is not prompt engineering. This is infrastructure. When the law moves,bthe ontology recompiles. When a new jurisdiction enters scope, the model extends. Same input, same output. Every time. Check out www.sammylabs.com for more info.
+
+The role/what we are looking for:
+
+We are all builders and there's a lot to build! We love folks who build in their spare time so show us the cool stuff you have made. Practically, you're a scrappy dev and happy to hop on youtube/deep research to learn new things
+Ideally 2+ years experience in a software engineer role (new grads welcome but you need to have things you have personally built). We don't care what university you went to or where you've worked prior, the main thing is you learn fast.
+This is a great role for someone who wants to learn the inner-workings of an extremely fast growing startup to one day take the plunge of your own
+Skills we favour but aren't a requirement, experience in/with:
+
+Nextjs
+Python
+AWS infra
+Langchain/langgraph
+fastapi
+Wait so it's a full-stack role? Sort of... If you're purely front-end or backend you need to show you are a beast at one of them - how you show us is up to you
+
+A note on AI: SAMMY is not an LLM wrapper. No LLM sits in the critical path of a verdict. If you're excited by mechanistic interpretability,symbolic + learned hybrids, and systems where correctness is provable rather than vibes-based - you'll fit in here.
+
+Pay & Equity
+
+Not being transparent with pay & equity sucks, we know. Which is why there is no upper limit to either, come to us with an offer - if you think you're a 150k/yr dev just tell us why, and if we agree - that salary is yours. Same with equity.
+
+Culture & Team
+
+We have overwhelming demand right now, we've had to move new customers to a waitlist... which means we work super hard. If you're past the late nights stage of your career that's totally understandable! We are all laser focused on building an entirely new software paradigm and that should excite you too!
+Everyone is autonomous, if you prefer to have a checklist of things to do then perhaps SAMMY isnt for you. You'll be setting your own roadmap.
+We're ex-Palantir, ex-founders, ex-hedge fund & ex-team GB athlete (singular, only one us was an athlete, the rest of us were certainly not 🙂)
+
+Benefits:
+
+We pay whatever you want - it's up to you to convince us you're worth it. That includes equity. We're well-funded and want to take the best folks so the salary should match!
+Free breakfast, lunch & dinner
+We do a group activity every week, not something lame like dinner - clay shooting, climbing, VR arcade - that kinda stuff.
+Our CEO's dog, Luffy, is unbelievably cute (you must be okay with dogs, he's a non-negotiable!)
+
+I want to build project using OxyJen and Springboot to demonstrate that i am a beast at backend
+The project: a mini deterministic compliance engine
+This maps directly onto what SAMMY does, and it's a natural extension of OxyJen rather than a new thing to learn.
+Concept: A backend service that takes a structured fact set (JSON) + a jurisdiction, runs it through a graph of rule-nodes, and returns a verdict with a full provenance trail — which rules fired, in what order, citing which regulation, and why. This is literally "statutes → deterministic engine → verdict with provenance," just scoped small.
+How to build it with what you already have:
+
+OxyJen provides the graph engine: each compliance rule becomes a NodePlugin (e.g., KYCThresholdNode, DataRetentionNode). Use RouterNode/BranchNode for conditional logic ("if transaction > $10,000, evaluate AML node"), MergeNode to combine multiple rule outcomes into one verdict.
+NodeContext becomes your provenance trail — every node writes its decision + citation into context as it fires, so the final output isn't just "PASS/FAIL" but a structured audit log.
+Spring Boot wraps this as a REST API: POST /evaluate → takes facts JSON → returns { verdict, provenance: [{rule, citation, result}], latencyMs }.
+Bonus that directly speaks their language: log and expose the actual evaluation latency in the response. Even if you're not hitting their 12ms claim, showing you're measuring and thinking about latency as a first-class concern signals you understood their pitch, not just their tech stack.
+
+Keep the rule set tiny and toy — 4-5 rules (say, basic KYC/AML-style checks) is plenty. The point isn't legal accuracy, it's proving the architecture: deterministic, traceable, same input → same output, every time. This is the mini project you can enhance it with what this domain needs

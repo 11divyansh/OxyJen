@@ -2,15 +2,26 @@ package io.oxyjen.llm.execution.tests;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.Test;
 
+import io.oxyjen.core.Graph;
 import io.oxyjen.core.Memory;
 import io.oxyjen.core.NodeContext;
+import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.ExecutionRuntime;
+import io.oxyjen.execution.metrics.NodeMetrics;
+import io.oxyjen.graph.ParallelExecutor;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.LLMChain;
 import io.oxyjen.llm.LLMNode;
+import io.oxyjen.llm.LLMResponse;
+import io.oxyjen.observe.ObservationBus;
 
 public class LLMNodeTest {
 
@@ -66,7 +77,7 @@ public class LLMNodeTest {
         assertEquals("hi", memory.entries().get(0).value());
 
         assertEquals("assistant", memory.entries().get(1).type());
-        assertEquals("echo:hi", memory.entries().get(1).value());
+        assertEquals(LLMResponse.of("echo:hi"), memory.entries().get(1).value());
     }
 
     @Test
@@ -118,13 +129,13 @@ public class LLMNodeTest {
         assertEquals("hello", memory.entries().get(0).value());
 
         assertEquals("assistant", memory.entries().get(1).type());
-        assertEquals("echo:hello", memory.entries().get(1).value());
+        assertEquals(LLMResponse.of("echo:hello"), memory.entries().get(1).value());
 
         assertEquals("user", memory.entries().get(2).type());
         assertEquals("world", memory.entries().get(2).value());
 
         assertEquals("assistant", memory.entries().get(3).type());
-        assertEquals("echo:world", memory.entries().get(3).value());
+        assertEquals(LLMResponse.of("echo:world"), memory.entries().get(3).value());
     }
 
 //    @Test
@@ -174,6 +185,38 @@ public class LLMNodeTest {
         print("primary calls", primary.calls);
 
         assertEquals("chain-ok", result);
+    }
+
+    @Test
+    void executorEmitsLlmMetricsOnCompletion() {
+        log("ParallelExecutor emits LLM metrics");
+
+        ObservationBus bus = new ObservationBus();
+        List<ExecutionEvent> events = new CopyOnWriteArrayList<>();
+        bus.register(events::add);
+
+        ExecutionRuntime runtime = ExecutionRuntime.builder()
+                .observationBus(bus)
+                .build();
+
+        Graph graph = Graph.builder("llm-metrics")
+                .addNode("llm", LLMNode.builder().model(new FakeChatModel()).build())
+                .build();
+
+        ParallelExecutor executor = new ParallelExecutor(runtime);
+        String result = executor.runSingle(graph, "hello", new NodeContext());
+
+        assertEquals("echo:hello", result);
+        ExecutionEvent.NodeCompleted completed = events.stream()
+                .filter(ExecutionEvent.NodeCompleted.class::isInstance)
+                .map(ExecutionEvent.NodeCompleted.class::cast)
+                .findFirst()
+                .orElseThrow();
+
+        assertInstanceOf(NodeMetrics.LlmNodeMetrics.class, completed.metrics());
+        NodeMetrics.LlmNodeMetrics metrics = (NodeMetrics.LlmNodeMetrics) completed.metrics();
+        assertTrue(metrics.duration().toMillis() >= 0);
+        assertTrue(metrics.outputValid() == null);
     }
 
 

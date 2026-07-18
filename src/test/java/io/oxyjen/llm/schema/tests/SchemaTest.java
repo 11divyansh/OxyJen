@@ -3,15 +3,22 @@ package io.oxyjen.llm.schema.tests;
 import static java.lang.System.out;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.Test;
 
+import io.oxyjen.core.Graph;
 import io.oxyjen.core.NodeContext;
+import io.oxyjen.execution.ExecutionEvent;
+import io.oxyjen.execution.ExecutionRuntime;
+import io.oxyjen.execution.metrics.NodeMetrics;
+import io.oxyjen.graph.ParallelExecutor;
 import io.oxyjen.llm.ChatModel;
 import io.oxyjen.llm.schema.FieldError;
 import io.oxyjen.llm.schema.JSONSchema;
@@ -22,6 +29,7 @@ import io.oxyjen.llm.schema.SchemaNode;
 import io.oxyjen.llm.schema.SchemaResult;
 import io.oxyjen.llm.schema.SchemaValidator;
 import io.oxyjen.llm.schema.SchemaValidator.ValidationResult;
+import io.oxyjen.observe.ObservationBus;
 
 public class SchemaTest {
 
@@ -210,6 +218,47 @@ public class SchemaTest {
 	    User result = node.process("prompt", new NodeContext());
 	    out.println(result);
 	    assertEquals("Bob", result.name());
+	}
+
+	@Test
+	void executorEmitsSchemaMetricsOnCompletion() {
+		log("ParallelExecutor emits schema metrics");
+		record User(String name) {}
+
+		ObservationBus bus = new ObservationBus();
+		List<ExecutionEvent> events = new CopyOnWriteArrayList<>();
+		bus.register(events::add);
+
+		ExecutionRuntime runtime = ExecutionRuntime.builder()
+				.observationBus(bus)
+				.build();
+
+		SchemaNode<User> node = SchemaNode.<User>builder(User.class)
+				.model(new FakeModel("{\"name\":\"Bob\"}"))
+				.schema(JSONSchema.object()
+						.property("name", PropertySchema.string("Name"))
+						.required("name")
+						.build())
+				.build();
+
+		Graph graph = Graph.builder("schema-metrics")
+				.addNode("schema", node)
+				.build();
+
+		ParallelExecutor executor = new ParallelExecutor(runtime);
+		User result = executor.runSingle(graph, "prompt", new NodeContext());
+
+		assertEquals("Bob", result.name());
+		ExecutionEvent.NodeCompleted completed = events.stream()
+				.filter(ExecutionEvent.NodeCompleted.class::isInstance)
+				.map(ExecutionEvent.NodeCompleted.class::cast)
+				.findFirst()
+				.orElseThrow();
+
+		assertInstanceOf(NodeMetrics.LlmNodeMetrics.class, completed.metrics());
+		NodeMetrics.LlmNodeMetrics metrics = (NodeMetrics.LlmNodeMetrics) completed.metrics();
+		assertTrue(metrics.duration().toMillis() >= 0);
+		assertTrue(Boolean.TRUE.equals(metrics.outputValid()));
 	}
 	
 	@Test
