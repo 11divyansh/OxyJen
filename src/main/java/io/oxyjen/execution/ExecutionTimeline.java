@@ -38,74 +38,95 @@ public final class ExecutionTimeline implements ObservationListener {
  
     @Override
     public void onEvent(ExecutionEvent event) {
-        if (!event.executionId().equals(executionId)) return;
- 
-        events.add(event);
- 
-        switch (event) {
-            case ExecutionEvent.WorkflowStarted e -> workflowStartedAt = e.at();
- 
-            case ExecutionEvent.WorkflowFinished e -> {
-                workflowFinishedAt = e.at();
-                workflowStatus = e.status();
-            }
-            case ExecutionEvent.ExecutionCancelled e -> {
-                workflowFinishedAt = e.at();
-                workflowStatus = ExecutionStatus.CANCELLED;
-            }
-            case ExecutionEvent.ExecutionSuspended e -> {
-                workflowFinishedAt = e.at();
-                workflowStatus = ExecutionStatus.SUSPENDED;
-            }
-            case ExecutionEvent.ExecutionResumed ignored -> workflowStatus = ExecutionStatus.RUNNING;
- 
-            case ExecutionEvent.NodeStarted e -> {
-                nodeStates.compute(e.nodeId(), (id, existing) -> {
-                    if (existing == null) existing = new MutableNodeState(id, executionId);
-                    existing.startedAt = e.at();
-                    existing.status = NodeStatus.RUNNING;
-                    existing.attempts = e.attempt();
-                    return existing;
-                });
-            }
-            case ExecutionEvent.NodeCompleted e -> {
-                nodeStates.compute(e.nodeId(), (id, existing) -> {
-                    if (existing == null) existing = new MutableNodeState(id, executionId);
-                    existing.finishedAt = e.at();
-                    existing.status = NodeStatus.COMPLETED;
-                    existing.metrics = e.metrics();
-                    return existing;
-                });
-            }
-            case ExecutionEvent.NodeFailed e -> {
-                nodeStates.compute(e.nodeId(), (id, existing) -> {
-                    if (existing == null) existing = new MutableNodeState(id, executionId);
-                    existing.finishedAt = e.at();
-                    existing.status = NodeStatus.FAILED;
-                    existing.failures.add(new NodeExecution.FailureRecord(
-                            e.attempt(), e.failure(), e.at()));
-                    return existing;
-                });
-            }
-            case ExecutionEvent.RetryAttempt e -> {
-                nodeStates.compute(e.nodeId(), (id, existing) -> {
-                    if (existing == null) existing = new MutableNodeState(id, executionId);
-                    existing.attempts = e.attempt();
-                    existing.failures.add(new NodeExecution.FailureRecord(
-                            e.attempt() - 1, e.failure(), e.at()));
-                    return existing;
-                });
-            }
-            case ExecutionEvent.NodeSkipped e -> {
-                nodeStates.compute(e.nodeId(), (id, existing) -> {
-                    if (existing == null) existing = new MutableNodeState(id, executionId);
-                    existing.status = NodeStatus.SKIPPED;
-                    existing.finishedAt = e.at();
-                    return existing;
-                });
-            }
-            default -> { /* recorded in events list above, no fold needed */ }
+        if (!event.executionId().equals(executionId)) {
+            return;
         }
+
+        events.add(event);
+
+        if (event instanceof ExecutionEvent.WorkflowStarted e) {
+            workflowStartedAt = e.at();
+        }
+        else if (event instanceof ExecutionEvent.WorkflowFinished e) {
+            workflowFinishedAt = e.at();
+            workflowStatus = e.status();
+        }
+        else if (event instanceof ExecutionEvent.ExecutionCancelled e) {
+            workflowFinishedAt = e.at();
+            workflowStatus = ExecutionStatus.CANCELLED;
+        }
+        else if (event instanceof ExecutionEvent.ExecutionSuspended e) {
+            workflowFinishedAt = e.at();
+            workflowStatus = ExecutionStatus.SUSPENDED;
+        }
+        else if (event instanceof ExecutionEvent.ExecutionResumed) {
+            workflowStatus = ExecutionStatus.RUNNING;
+        }
+
+        else if (event instanceof ExecutionEvent.NodeStarted e) {
+            nodeStates.compute(e.nodeId(), (id, existing) -> {
+                if (existing == null) {
+                    existing = new MutableNodeState(id, executionId);
+                }
+                existing.startedAt = e.at();
+                existing.status = NodeStatus.RUNNING;
+                existing.attempts = e.attempt();
+                return existing;
+            });
+        }
+        else if (event instanceof ExecutionEvent.NodeCompleted e) {
+            nodeStates.compute(e.nodeId(), (id, existing) -> {
+                if (existing == null) {
+                    existing = new MutableNodeState(id, executionId);
+                }
+                existing.finishedAt = e.at();
+                existing.status = NodeStatus.COMPLETED;
+                existing.metrics = e.metrics();
+                return existing;
+            });
+        }
+        else if (event instanceof ExecutionEvent.NodeFailed e) {
+            nodeStates.compute(e.nodeId(), (id, existing) -> {
+                if (existing == null) {
+                    existing = new MutableNodeState(id, executionId);
+                }
+                existing.finishedAt = e.at();
+                existing.status = NodeStatus.FAILED;
+                existing.failures.add(new NodeExecution.AttemptFailure(
+                        e.attempt(),
+                        e.failure(),
+                        e.at()));
+                return existing;
+            });
+        }
+        else if (event instanceof ExecutionEvent.RetryAttempt e) {
+            nodeStates.compute(e.nodeId(), (id, existing) -> {
+                if (existing == null) {
+                    existing = new MutableNodeState(id, executionId);
+                }
+                existing.attempts = e.attempt();
+                existing.failures.add(new NodeExecution.AttemptFailure(
+                        e.attempt() - 1,
+                        e.failure(),
+                        e.at()));
+                return existing;
+            });
+        }
+        else if (event instanceof ExecutionEvent.NodeSkipped e) {
+            nodeStates.compute(e.nodeId(), (id, existing) -> {
+                if (existing == null) {
+                    existing = new MutableNodeState(id, executionId);
+                }
+                existing.status = NodeStatus.SKIPPED;
+                existing.finishedAt = e.at();
+                return existing;
+            });
+        }
+
+        // BranchTaken, ParallelStarted, ParallelCompleted,
+        // CheckpointSaved, ChunkGenerated, etc. are intentionally ignored
+        // here because they don't affect the folded node state. They are
+        // already preserved in the raw event log.
     }
     
     /** The execution this timeline belongs to. */

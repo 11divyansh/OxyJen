@@ -302,7 +302,7 @@ public sealed interface ExecutionEvent {
 
    /**
     * Emitted when a previously-saved checkpoint is loaded back into a live
-    * execution — typically as part of {@code replay.fromCheckpoint()} or
+    * execution typically as part of {@code replay.fromCheckpoint()} or
     * when resuming a suspended workflow.
     *
     * @param nodeId  the node the checkpoint was restored at
