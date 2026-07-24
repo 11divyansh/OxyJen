@@ -286,6 +286,7 @@ class FormatterNode implements NodePlugin<String, String> {
 - **Streaming responses**
 - **Token counting & cost tracking**
 - **Async/reactive API**
+- **Observability**
 
 ---
 
