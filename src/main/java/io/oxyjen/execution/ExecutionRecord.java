@@ -9,6 +9,25 @@ import java.util.Optional;
 /**
  * An immutable point-in-time snapshot of a workflow execution.
  *
+ ** <p>Produced by {@link ExecutionTimeline#snapshot()} and consumed by
+ * {@link io.oxyjen.persist.ExecutionStore} for persistence, by
+ * {@link io.oxyjen.replay.ReplayEngine} for replay, and by
+ * {@link io.oxyjen.replay.ExecutionDiff} for comparing two runs.
+ *
+ * <p>Carries two complementary views of the same execution:
+ * <ul>
+ *   <li>{@link #events()} - the raw ordered event sequence. This is the
+ *       source of truth: replay reconstructs execution by replaying these
+ *       events in order.</li>
+ *   <li>{@link #nodeExecutions()} - per-node aggregated view, pre-folded
+ *       from the event sequence. Exporters and dashboards read from here
+ *       rather than scanning the raw event log every time.</li>
+ * </ul>
+ *
+ * <p>Both views are immutable copies taken at the moment
+ * {@link ExecutionTimeline#snapshot()} was called. Events that arrive
+ * after the snapshot are not reflected here.
+ * 
  * @param executionId     unique identifier for this workflow run
  * @param status          workflow-level status at snapshot time
  * @param startedAt       when the workflow started; {@code null} if

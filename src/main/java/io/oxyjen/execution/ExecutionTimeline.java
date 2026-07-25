@@ -13,6 +13,37 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import io.oxyjen.execution.metrics.NodeMetrics;
 import io.oxyjen.observe.ObservationListener;
 
+/**
+ * Live accumulator for a single workflow execution.
+ *
+ * <p>Implements {@link ObservationListener} — register it on
+ * {@link io.oxyjen.observe.ObservationBus} and it will fold every incoming
+ * {@link ExecutionEvent} into two views:
+ *
+ * <ul>
+ *   <li>{@link #events()} the raw, ordered sequence of every event emitted
+ *       during this execution. This is the source of truth for replay and
+ *       audit: the exact sequence of what happened, in order.</li>
+ *   <li>{@link #nodeExecutions()} a per-node aggregated view, built by
+ *       folding {@code NodeStarted}, {@code NodeCompleted}, {@code NodeFailed},
+ *       {@code RetryAttempt}, and {@code NodeSkipped} events together into
+ *       {@link NodeExecution} records. This is what
+ *       {@link io.oxyjen.observe.MetricsCollector} and exporters read.</li>
+ * </ul>
+ *
+ * <p><b>Fold logic:</b>
+ * <ol>
+ *   <li>{@code NodeStarted} opens a {@link NodeExecution} with
+ *       {@link NodeStatus#RUNNING}.</li>
+ *   <li>{@code RetryAttempt} appends a {@link NodeExecution.FailureRecord}
+ *       to the in-progress node.</li>
+ *   <li>{@code NodeCompleted} closes the node with {@link NodeStatus#COMPLETED}
+ *       and attaches the final {@link io.oxyjen.execution.metrics.NodeMetrics}.</li>
+ *   <li>{@code NodeFailed} closes the node with {@link NodeStatus#FAILED}.</li>
+ *   <li>{@code NodeSkipped} records the node as {@link NodeStatus#SKIPPED}
+ *       without ever opening a running state.</li>
+ * </ol>
+ */
 public final class ExecutionTimeline implements ObservationListener {
 
 	private final String executionId;
