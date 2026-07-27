@@ -54,6 +54,9 @@ public final class ExecutionTimeline implements ObservationListener {
 	/** Mutable per-node state, keyed by nodeId. */
     private final Map<String, MutableNodeState> nodeStates = new ConcurrentHashMap<>();
     
+    /** workflowId from WorkflowStarted event, promoted for efficient querying. */
+    private volatile String workflowId;
+    
     /** Workflow-level start time, set on WorkflowStarted. */
     private volatile Instant workflowStartedAt;
  
@@ -77,6 +80,7 @@ public final class ExecutionTimeline implements ObservationListener {
 
         if (event instanceof ExecutionEvent.WorkflowStarted e) {
             workflowStartedAt = e.at();
+            workflowId = e.workflowId();
         }
         else if (event instanceof ExecutionEvent.WorkflowFinished e) {
             workflowFinishedAt = e.at();
@@ -220,11 +224,12 @@ public final class ExecutionTimeline implements ObservationListener {
     public ExecutionRecord snapshot() {
         return new ExecutionRecord(
                 executionId,
+                workflowId,
                 workflowStatus,
                 workflowStartedAt,
                 workflowFinishedAt,
-                List.copyOf(events),
-                Map.copyOf(nodeExecutions())
+                events(),
+                nodeExecutions()
         );
     }
     

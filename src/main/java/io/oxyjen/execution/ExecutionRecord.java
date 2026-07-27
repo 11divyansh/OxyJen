@@ -23,12 +23,21 @@ import java.util.Optional;
  *       from the event sequence. Exporters and dashboards read from here
  *       rather than scanning the raw event log every time.</li>
  * </ul>
+ * 
+ * <p>{@link #workflowId()} is promoted to a top-level field (not extracted from
+ * events at query time) so persistence backends can index it as a column/field
+ * without deserializing the full event log for every query.
  *
  * <p>Both views are immutable copies taken at the moment
  * {@link ExecutionTimeline#snapshot()} was called. Events that arrive
  * after the snapshot are not reflected here.
  * 
+ * @param schemaVersion   version of the serialization schema, increment when
+ *                        {@link ExecutionRecord}'s serialized shape changes so
+ *                        backends can migrate old records. Currently {@code 1}.
  * @param executionId     unique identifier for this workflow run
+ * @param workflowId      identifier of the workflow definition that was run;
+ *                        promoted to top level for efficient querying
  * @param status          workflow-level status at snapshot time
  * @param startedAt       when the workflow started; {@code null} if
  *                        {@code WorkflowStarted} was never emitted
@@ -38,21 +47,79 @@ import java.util.Optional;
  * @param nodeExecutions  per-node aggregated execution records, keyed by nodeId
  */
 public record ExecutionRecord(
+		int schemaVersion,
         String executionId,
+        String workflowId,
         ExecutionStatus status,
         Instant startedAt,
         Instant finishedAt,
         List<ExecutionEvent> events,
         Map<String, NodeExecution> nodeExecutions
 ) {
-
+	
+	/** Current schema version. Increment when the serialized shape changes. */
+    public static final int CURRENT_SCHEMA_VERSION = 1;
+    
     public ExecutionRecord {
+    	if (schemaVersion < 1) 
+            throw new IllegalArgumentException("schemaVersion must be >= 1");
         if (executionId == null || executionId.isBlank())
             throw new IllegalArgumentException("executionId must not be blank");
+        if (workflowId == null || workflowId.isBlank()) 
+            throw new IllegalArgumentException("workflowId must not be blank");
         if (status == null)
             throw new IllegalArgumentException("status must not be null");
+        if (startedAt != null && finishedAt != null && finishedAt.isBefore(startedAt)) 
+            throw new IllegalArgumentException("finishedAt must not be before startedAt");
+
+        validateStatusConsistency(status, startedAt, finishedAt);
         events = List.copyOf(events);
         nodeExecutions = Map.copyOf(nodeExecutions);
+    }
+    
+    /**
+     * Convenience constructor that fills in the current schema version.
+     * Use this in production, the full constructor is for deserialization only.
+     */
+    public ExecutionRecord(
+            String executionId,
+            String workflowId,
+            ExecutionStatus status,
+            Instant startedAt,
+            Instant finishedAt,
+            List<ExecutionEvent> events,
+            Map<String, NodeExecution> nodeExecutions
+    ) {
+        this(CURRENT_SCHEMA_VERSION, executionId, workflowId, status, startedAt, finishedAt, events, nodeExecutions);
+    }
+    
+    private static void validateStatusConsistency(
+            ExecutionStatus status,
+            Instant startedAt,
+            Instant finishedAt
+    ) {
+
+        switch (status) {
+            case RUNNING -> {
+                if (finishedAt != null) 
+                    throw new IllegalArgumentException("RUNNING execution must not have finishedAt");
+            }
+
+            case COMPLETED, FAILED, CANCELLED -> {
+                if (finishedAt == null) 
+                    throw new IllegalArgumentException(status + " execution must have finishedAt");
+            }
+
+            case SUSPENDED -> {
+                // Suspended executions are paused and therefore have a
+                // suspension timestamp, but may later be resumed.
+                if (finishedAt == null) 
+                    throw new IllegalArgumentException("SUSPENDED execution must have finishedAt");
+            }
+        }
+
+        if (startedAt == null && status != ExecutionStatus.RUNNING) 
+        	throw new IllegalArgumentException("Non-running executions must have startedAt");
     }
 
     /** Total wall-clock duration of the execution, or empty if not yet finished. */
