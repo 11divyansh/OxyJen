@@ -1,6 +1,7 @@
 package io.oxyjen.persist;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.OptionalLong;
 
 import io.oxyjen.execution.ExecutionRecord;
@@ -12,6 +13,16 @@ import io.oxyjen.execution.ExecutionRecord;
  * <p>Never returns an unbounded {@code List<ExecutionRecord>} on a store
  * with millions of executions that would load everything into memory.
  *
+ * * <pre>{@code
+ * int offset = 0;
+ * ExecutionPage page;
+ * do {
+ *     page = store.find(q -> q.status(COMPLETED).limit(100).offset(offset));
+ *     process(page.records());
+ *     offset = page.nextOffset();
+ * } while (page.hasMore());
+ * }</pre>
+ * 
  * @param records     the records on this page; never {@code null}, may be empty
  * @param totalCount  total number of records matching the query across all pages,
  *                    or {@code -1} if the backend cannot compute this efficiently
@@ -27,7 +38,7 @@ public record ExecutionPage(
 ) {
 
     public ExecutionPage {
-        records = List.copyOf(records);
+        records = List.copyOf(Objects.requireNonNull(records));
         if (totalCount == null) throw new IllegalArgumentException("totalCount must not be null");
     }
 
