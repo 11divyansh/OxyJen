@@ -38,8 +38,33 @@ public record ExecutionPage(
 ) {
 
     public ExecutionPage {
-        records = List.copyOf(Objects.requireNonNull(records));
-        if (totalCount == null) throw new IllegalArgumentException("totalCount must not be null");
+        records = List.copyOf(Objects.requireNonNull(records, "records must not be null"));
+        totalCount = Objects.requireNonNull(totalCount, "totalCount must not be null");
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must be >= 0");
+        }
+
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit must be >= 1");
+        }
+
+        if (totalCount.isPresent()) {
+            long count = totalCount.getAsLong();
+
+            if (count < 0) {
+                throw new IllegalArgumentException("totalCount must be >= 0");
+            }
+
+            if (count < records.size()) {
+                throw new IllegalArgumentException(
+                        "totalCount cannot be smaller than the page size");
+            }
+
+            if (offset > count) {
+                throw new IllegalArgumentException(
+                        "offset cannot exceed totalCount");
+            }
+        }
     }
 
     /** Whether there are more records beyond this page. */

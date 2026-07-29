@@ -1,10 +1,11 @@
 package io.oxyjen.persist;
 
-import io.oxyjen.execution.ExecutionStatus;
-
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+
+import io.oxyjen.execution.ExecutionStatus;
 
 /**
  * Type-safe query object for filtering {@link io.oxyjen.execution.ExecutionRecord}s
@@ -37,8 +38,21 @@ public final class ExecutionQuery {
 
     /** Fields that results can be sorted by. */
     public enum SortField {
-        STARTED_AT,
-        FINISHED_AT
+    	STARTED_AT("startedAt"),
+        FINISHED_AT("finishedAt"),
+        STATUS("status"),
+        WORKFLOW_ID("workflowId"),
+        EXECUTION_ID("executionId");
+
+        private final String property;
+
+        SortField(String property) {
+            this.property = property;
+        }
+
+        public String property() {
+            return property;
+        }
     }
 
     /** Sort direction. */
@@ -47,6 +61,9 @@ public final class ExecutionQuery {
         DESC
     }
 
+    public static final int DEFAULT_LIMIT = 100;
+
+    public static final int MAX_LIMIT = 1000;
     private final String workflowId;
     private final ExecutionStatus status;
     private final Instant startedAfter;
@@ -111,14 +128,16 @@ public final class ExecutionQuery {
         private Instant finishedBefore;
         private SortField sortField      = SortField.STARTED_AT;
         private SortDirection sortDirection = SortDirection.DESC;
-        private int limit  = 100;
+        private int limit  = DEFAULT_LIMIT;
         private int offset = 0;
 
         private Builder() {}
 
         public Builder workflowId(String workflowId) {
-            this.workflowId = workflowId;
-            return this;
+        	  Objects.requireNonNull(workflowId);
+        	  if (workflowId.isBlank()) throw new IllegalArgumentException("workflowId must not be blank");
+        	  this.workflowId = workflowId;
+        	  return this;
         }
 
         public Builder status(ExecutionStatus status) {
@@ -154,8 +173,8 @@ public final class ExecutionQuery {
          * }</pre>
          */
         public Builder orderBy(SortField field, SortDirection direction) {
-            this.sortField = field;
-            this.sortDirection = direction;
+            this.sortField = Objects.requireNonNull(field, "sort field must not be null");
+            this.sortDirection = Objects.requireNonNull(direction, "sort direction must not be null");
             return this;
         }
 
@@ -164,7 +183,7 @@ public final class ExecutionQuery {
          * Defaults to 100.
          */
         public Builder limit(int limit) {
-            if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+            if (limit < 1 || limit > MAX_LIMIT) throw new IllegalArgumentException("limit must be between 1 and 1000");
             this.limit = limit;
             return this;
         }
@@ -178,11 +197,11 @@ public final class ExecutionQuery {
 
         public ExecutionQuery build() {
             // Validate time ranges
-            if (startedAfter != null && startedBefore != null && !startedAfter.isBefore(startedBefore)) {
-                throw new IllegalArgumentException("startedAfter must be before startedBefore");
+            if (startedAfter != null && startedBefore != null && startedAfter.isAfter(startedBefore)) {
+                throw new IllegalArgumentException("startedAfter must not be after startedBefore");
             }
-            if (finishedAfter != null && finishedBefore != null && !finishedAfter.isBefore(finishedBefore)) {
-                throw new IllegalArgumentException("finishedAfter must be before finishedBefore");
+            if (finishedAfter != null && finishedBefore != null && finishedAfter.isAfter(finishedBefore)) {
+                throw new IllegalArgumentException("finishedAfter must not be after finishedBefore");
             }
             return new ExecutionQuery(this);
         }
