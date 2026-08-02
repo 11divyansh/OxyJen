@@ -66,6 +66,61 @@ public final class InMemoryExecutionStore implements ExecutionStore {
         requireNonBlank(executionId, "executionId");
         store.remove(executionId);
     }
+    
+    @Override
+    public ExecutionPage find(ExecutionQuery query) {
+        if (query == null) throw new IllegalArgumentException("query must not be null");
+ 
+        Stream<ExecutionRecord> stream = store.values().stream();
+ 
+        if (query.workflowId().isPresent()) {
+            String wid = query.workflowId().get();
+            // workflowId is now a top-level field — no event scanning needed
+            stream = stream.filter(r -> wid.equals(r.workflowId()));
+        }
+ 
+        if (query.status().isPresent()) {
+            ExecutionStatus s = query.status().get();
+            stream = stream.filter(r -> r.status() == s);
+        }
+ 
+        if (query.startedAfter().isPresent()) {
+            Instant t = query.startedAfter().get();
+            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isAfter(t));
+        }
+ 
+        if (query.startedBefore().isPresent()) {
+            Instant t = query.startedBefore().get();
+            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isBefore(t));
+        }
+ 
+        if (query.finishedAfter().isPresent()) {
+            Instant t = query.finishedAfter().get();
+            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isAfter(t));
+        }
+ 
+        if (query.finishedBefore().isPresent()) {
+            Instant t = query.finishedBefore().get();
+            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isBefore(t));
+        }
+ 
+        // sorting 
+        Comparator<ExecutionRecord> comparator = buildComparator(
+                query.sortField(), query.sortDirection());
+        stream = stream.sorted(comparator);
+ 
+        // count before pagination 
+        List<ExecutionRecord> allMatching = stream.toList();
+        long totalCount = allMatching.size();
+ 
+        // offset + limit 
+        List<ExecutionRecord> page = allMatching.stream()
+                .skip(query.offset())
+                .limit(query.limit())
+                .toList();
+ 
+        return ExecutionPage.of(page, totalCount, query.offset(), query.limit());
+    }
 
     /** Returns the number of records currently held in memory. */
     public int size() {
