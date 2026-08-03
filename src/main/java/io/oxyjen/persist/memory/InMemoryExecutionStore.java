@@ -1,11 +1,13 @@
 package io.oxyjen.persist.memory;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
 import io.oxyjen.execution.ExecutionRecord;
@@ -38,11 +40,34 @@ import io.oxyjen.persist.ExecutionStore;
  */
 public final class InMemoryExecutionStore implements ExecutionStore {
 
-    private final Map<String, ExecutionRecord> store = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ExecutionRecord> store;
+    
+    /** Creates an empty in-memory store */
+    public InMemoryExecutionStore() {
+    	this.store = new ConcurrentHashMap<>();
+    }
+    
+    /**
+     * Creates an in-memory store pre-populated with the supplied records.
+     * Useful for replay, importing snapshots, migrations, and tests.
+     *
+     * @param records initial records to populate
+     * @throws ExecutionAlreadyExistsException if duplicate execution ids exist
+     */
+    public InMemoryExecutionStore(Collection<ExecutionRecord> records) {
+        Objects.requireNonNull(records, "records must not be null");
+        this.store = new ConcurrentHashMap<>();
+        for (ExecutionRecord record : records) {
+            ExecutionRecord existing = store.putIfAbsent(record.executionId(), record);
+            if (existing != null) {
+                throw new ExecutionAlreadyExistsException(record.executionId());
+            }
+        }
+    }
 
     @Override
     public void save(ExecutionRecord record) {
-        if (record == null) throw new IllegalArgumentException("record must not be null");
+    	Objects.requireNonNull(record, "record must not be null");
         ExecutionRecord existing = store.putIfAbsent(record.executionId(), record);
         if (existing != null) {
             throw new ExecutionAlreadyExistsException(record.executionId());
@@ -69,7 +94,7 @@ public final class InMemoryExecutionStore implements ExecutionStore {
     
     @Override
     public ExecutionPage find(ExecutionQuery query) {
-        if (query == null) throw new IllegalArgumentException("query must not be null");
+    	Objects.requireNonNull(query, "query must not be null");
  
         Stream<ExecutionRecord> stream = store.values().stream();
  
@@ -84,6 +109,14 @@ public final class InMemoryExecutionStore implements ExecutionStore {
             stream = stream.filter(r -> r.status() == s);
         }
  
+        /*
+         * Time filters are exclusive:
+         *
+         * startedAfter(t)  -> startedAt > t
+         * startedBefore(t) -> startedAt < t
+         * finishedAfter(t) -> finishedAt > t
+         * finishedBefore(t)-> finishedAt < t
+         */
         if (query.startedAfter().isPresent()) {
             Instant t = query.startedAfter().get();
             stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isAfter(t));
@@ -105,9 +138,7 @@ public final class InMemoryExecutionStore implements ExecutionStore {
         }
  
         // sorting 
-        Comparator<ExecutionRecord> comparator = buildComparator(
-                query.sortField(), query.sortDirection());
-        stream = stream.sorted(comparator);
+        stream = stream.sorted(comparatorFor(query.sortField(), query.sortDirection()));
  
         // count before pagination 
         List<ExecutionRecord> allMatching = stream.toList();
@@ -132,12 +163,18 @@ public final class InMemoryExecutionStore implements ExecutionStore {
         store.clear();
     }
 
-    private Comparator<ExecutionRecord> buildComparator(
-            SortField field, SortDirection direction) {
+    private Comparator<ExecutionRecord> comparatorFor(SortField field, SortDirection direction) {
 
         Comparator<ExecutionRecord> base = switch (field) {
-            case STARTED_AT -> Comparator.comparing(r -> r.startedAt() == null ? Instant.EPOCH : r.startedAt());
-            case FINISHED_AT -> Comparator.comparing(r -> r.finishedAt() == null ? Instant.EPOCH : r.finishedAt());
+        	case STARTED_AT -> Comparator.comparing(ExecutionRecord::startedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
+
+        	case FINISHED_AT -> Comparator.comparing(ExecutionRecord::finishedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
+
+        	case STATUS -> Comparator.comparing(ExecutionRecord::status);
+
+        	case WORKFLOW_ID -> Comparator.comparing(ExecutionRecord::workflowId);
+
+        	case EXECUTION_ID -> Comparator.comparing(ExecutionRecord::executionId);
         };
 
         return direction == SortDirection.DESC ? base.reversed() : base;
