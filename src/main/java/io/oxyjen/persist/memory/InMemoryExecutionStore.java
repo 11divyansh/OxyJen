@@ -96,52 +96,10 @@ public final class InMemoryExecutionStore implements ExecutionStore {
     public ExecutionPage find(ExecutionQuery query) {
     	Objects.requireNonNull(query, "query must not be null");
  
-        Stream<ExecutionRecord> stream = store.values().stream();
+        Stream<ExecutionRecord> stream = filtered(store.values().stream(), query);
  
-        if (query.workflowId().isPresent()) {
-            String wid = query.workflowId().get();
-            // workflowId is now a top-level field — no event scanning needed
-            stream = stream.filter(r -> wid.equals(r.workflowId()));
-        }
- 
-        if (query.status().isPresent()) {
-            ExecutionStatus s = query.status().get();
-            stream = stream.filter(r -> r.status() == s);
-        }
- 
-        /*
-         * Time filters are exclusive:
-         *
-         * startedAfter(t)  -> startedAt > t
-         * startedBefore(t) -> startedAt < t
-         * finishedAfter(t) -> finishedAt > t
-         * finishedBefore(t)-> finishedAt < t
-         */
-        if (query.startedAfter().isPresent()) {
-            Instant t = query.startedAfter().get();
-            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isAfter(t));
-        }
- 
-        if (query.startedBefore().isPresent()) {
-            Instant t = query.startedBefore().get();
-            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isBefore(t));
-        }
- 
-        if (query.finishedAfter().isPresent()) {
-            Instant t = query.finishedAfter().get();
-            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isAfter(t));
-        }
- 
-        if (query.finishedBefore().isPresent()) {
-            Instant t = query.finishedBefore().get();
-            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isBefore(t));
-        }
- 
-        // sorting 
-        stream = stream.sorted(comparatorFor(query.sortField(), query.sortDirection()));
- 
-        // count before pagination 
-        List<ExecutionRecord> allMatching = stream.toList();
+        // sorting + count before pagination 
+        List<ExecutionRecord> allMatching = stream.sorted(comparatorFor(query.sortField(), query.sortDirection())).toList();
         long totalCount = allMatching.size();
  
         // offset + limit 
@@ -151,6 +109,12 @@ public final class InMemoryExecutionStore implements ExecutionStore {
                 .toList();
  
         return ExecutionPage.of(page, totalCount, query.offset(), query.limit());
+    }
+    
+    @Override
+    public long count(ExecutionQuery query) {
+        Objects.requireNonNull(query, "query must not be null");
+        return filtered(store.values().stream(), query).count();
     }
 
     /** Returns the number of records currently held in memory. */
@@ -162,7 +126,50 @@ public final class InMemoryExecutionStore implements ExecutionStore {
     public void clear() {
         store.clear();
     }
-
+    
+    /** Applies all query filters to a stream. Shared by find() and count(). */
+    private Stream<ExecutionRecord> filtered(Stream<ExecutionRecord> stream,
+                                              ExecutionQuery query) {
+        if (query.workflowId().isPresent()) {
+            String wid = query.workflowId().get();
+            // workflowId is a top-level field, no event scanning needed
+            stream = stream.filter(r -> wid.equals(r.workflowId()));
+        }
+        if (query.status().isPresent()) {
+            ExecutionStatus s = query.status().get();
+            stream = stream.filter(r -> r.status() == s);
+        }
+        
+        /*
+         * Time filters are exclusive:
+         *
+         * startedAfter(t)  -> startedAt > t
+         * startedBefore(t) -> startedAt < t
+         * finishedAfter(t) -> finishedAt > t
+         * finishedBefore(t)-> finishedAt < t
+         */
+        if (query.startedAfter().isPresent()) {
+            Instant t = query.startedAfter().get();
+            // exclusive (>), documented on ExecutionQuery
+            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isAfter(t));
+        }
+        if (query.startedBefore().isPresent()) {
+            Instant t = query.startedBefore().get();
+            // exclusive (<)
+            stream = stream.filter(r -> r.startedAt() != null && r.startedAt().isBefore(t));
+        }
+        if (query.finishedAfter().isPresent()) {
+            Instant t = query.finishedAfter().get();
+            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isAfter(t));
+        }
+        if (query.finishedBefore().isPresent()) {
+            Instant t = query.finishedBefore().get();
+            stream = stream.filter(r -> r.finishedAt() != null && r.finishedAt().isBefore(t));
+        }
+        return stream;
+    }
+    
+    /** Builds a comparator for the given sor field and direction*/
     private Comparator<ExecutionRecord> comparatorFor(SortField field, SortDirection direction) {
 
         Comparator<ExecutionRecord> base = switch (field) {

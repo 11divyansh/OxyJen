@@ -107,4 +107,18 @@ public interface ExecutionStore {
    default ExecutionPage find(Consumer<ExecutionQuery.Builder> spec) {
        return find(ExecutionQuery.of(spec));
    }
+   
+   /**
+    * Counts records matching the query without loading them.
+    * Much cheaper than {@code find(...).totalCount()} for dashboard use.
+    *
+    * <pre>{@code
+    * long failures = store.count(q -> q.status(ExecutionStatus.FAILED));
+    * }</pre>
+    */
+   long count(ExecutionQuery query);
+
+   default long count(Consumer<ExecutionQuery.Builder> spec) {
+       return count(ExecutionQuery.of(spec));
+   }
 }

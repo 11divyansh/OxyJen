@@ -107,6 +107,10 @@ public final class AsyncExecutionStore {
     public CompletableFuture<ExecutionPage> find(Consumer<ExecutionQuery.Builder> spec) {
         return find(ExecutionQuery.of(spec));
     }
+    
+    public CompletableFuture<Long> count(ExecutionQuery query) {
+        return CompletableFuture.supplyAsync(() -> delegate.count(query), executor);
+    }
 
     /** Returns the underlying synchronous store. */
     public ExecutionStore delegate() {
