@@ -76,6 +76,51 @@ public final class ExecutionLogger implements ObservationListener {
                     + " node=" + e.nodeId()
                     + " reason=" + e.reason());
         }
+        
+        else if (event instanceof ExecutionEvent.BranchTaken e) {
+            info(pad("BRANCH TAKEN")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId()
+                    + " route=" + e.routeKey());
+
+        }
+        else if (event instanceof ExecutionEvent.ParallelStarted e) {
+            info(pad("PARALLEL STARTED")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId()
+                    + " tasks=" + e.taskCount());
+
+        }
+        else if (event instanceof ExecutionEvent.ParallelCompleted e) {
+            info(pad("PARALLEL COMPLETED")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId()
+                    + " succeeded=" + e.succeeded()
+                    + " failed=" + e.failed()
+                    + " duration=" + e.durationMs() + "ms");
+
+        }
+        else if (event instanceof ExecutionEvent.CheckpointCreated e) {
+            info(pad("CHECKPOINT CREATED")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId());
+
+        }
+        else if (event instanceof ExecutionEvent.CheckpointRestored e) {
+            info(pad("CHECKPOINT RESTORED")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId());
+
+        }
+        else if (event instanceof ExecutionEvent.ChunkGenerated e) {
+            // Streaming generates many events, so keeping this at FINE level.
+            LOG.fine(PREFIX
+                    + pad("CHUNK")
+                    + " executionId=" + e.executionId()
+                    + " node=" + e.nodeId()
+                    + " index=" + e.index());
+
+        }
     }
 
     private void info(String message) {
