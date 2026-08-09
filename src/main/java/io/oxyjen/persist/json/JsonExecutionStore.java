@@ -45,8 +45,7 @@ public final class JsonExecutionStore implements ExecutionStore {
      * @param directory directory used to persist execution JSON files
      */
     public JsonExecutionStore(Path directory) {
-        this.directory = Objects.requireNonNull(directory,
-                "directory must not be null");
+        this.directory = Objects.requireNonNull(directory, "directory must not be null");
     }
 
     /**
