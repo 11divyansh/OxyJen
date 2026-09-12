@@ -278,7 +278,6 @@ class FormatterNode implements NodePlugin<String, String> {
 - I'm building this to learn java in a much deeper way.
 
 ### **Phase 6 in progress**
-- **RAG support** - Vector databases, embeddings, document loaders
 - **Cost management** - Budgets, limits, usage tracking
 - **Enterprise features** - Audit logs, RBAC, compliance
 - **Multi-tenancy** - Isolate data between users/orgs
